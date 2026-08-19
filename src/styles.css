@@ -996,6 +996,15 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.routine-line em {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+  margin-top: 5px;
+}
+
 .thought-card {
   background: #f6f7f7;
   border: 1px solid #dbe1e4;

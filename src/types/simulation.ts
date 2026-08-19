@@ -217,6 +217,9 @@ export type Household = {
   sharedCash: number;
   foodStock: number;
   stress: number;
+  unpaidBills: number;
+  financialStatus: "stable" | "strained" | "critical";
+  lastMoneyNote: string;
 };
 
 export type Citizen = {

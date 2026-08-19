@@ -315,10 +315,11 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
 
       {household ? (
         <div className="routine-line">
-          <span>{household.name}</span>
+          <span>{household.name} · {household.financialStatus}</span>
           <strong>
-            {householdMembers?.length ?? 0} members · ${Math.round(household.sharedCash).toLocaleString()} shared · {household.foodStock}% food · {Math.round(household.stress)}% stress
+            {householdMembers?.length ?? 0} members · ${Math.round(household.sharedCash).toLocaleString()} shared · ${Math.round(household.unpaidBills).toLocaleString()} unpaid · {household.foodStock}% food · {Math.round(household.stress)}% stress
           </strong>
+          <em>{household.lastMoneyNote}</em>
         </div>
       ) : null}
 

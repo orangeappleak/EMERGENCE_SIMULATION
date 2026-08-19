@@ -349,6 +349,9 @@ function createTownPopulation(): { households: Household[]; citizens: Citizen[] 
       sharedCash: 700 + Math.round(rand() * 3200),
       foodStock: 35 + Math.round(rand() * 65),
       stress: 20 + Math.round(rand() * 42),
+      unpaidBills: 0,
+      financialStatus: "stable",
+      lastMoneyNote: "The household is keeping up with bills.",
     };
 
     const householdType = householdIndex % 5;
@@ -562,8 +565,10 @@ function payCitizenWage(sim: SimulationState, citizen: Citizen, amount: number) 
 
 function payHouseholdCost(sim: SimulationState, household: Household, category: "rent" | "living", amount: number, note: string) {
   const paid = Math.min(household.sharedCash, amount);
+  const shortfall = amount - paid;
   household.sharedCash -= paid;
-  household.stress = clamp(household.stress + (paid < amount ? 5 : 0), 0, 100);
+  household.unpaidBills = Math.round(Math.max(0, household.unpaidBills + shortfall - (paid >= amount ? paid * 0.08 : 0)));
+  household.stress = clamp(household.stress + (shortfall > 0 ? 5 + shortfall * 0.03 : -1), 0, 100);
   adjustBusiness(sim, "town", paid);
   addTransaction(sim, {
     category,
@@ -573,8 +578,48 @@ function payHouseholdCost(sim: SimulationState, household: Household, category: 
     toId: "town",
     toName: "Town services",
     householdId: household.id,
-    note: paid < amount ? `${note} They could only cover $${Math.round(paid)}.` : note,
+    note: shortfall > 0 ? `${note} They could only cover $${Math.round(paid)} and carried $${Math.round(shortfall)} forward.` : note,
   });
+}
+
+function updateHouseholdFinanceStatus(sim: SimulationState, household: Household, members: Citizen[]) {
+  const monthlyCushion = household.rent > 0 ? household.sharedCash / household.rent : 1;
+  const pressure = household.unpaidBills * 0.09
+    + Math.max(0, 45 - household.foodStock) * 0.8
+    + Math.max(0, 0.5 - monthlyCushion) * 42;
+
+  const previousStatus = household.financialStatus;
+  household.financialStatus = pressure > 62 || household.unpaidBills > household.rent * 0.45
+    ? "critical"
+    : pressure > 28 || household.unpaidBills > 0 || monthlyCushion < 0.75
+      ? "strained"
+      : "stable";
+
+  household.stress = clamp(18 + pressure + (household.financialStatus === "critical" ? 18 : household.financialStatus === "strained" ? 7 : 0), 0, 100);
+  household.lastMoneyNote = household.financialStatus === "critical"
+    ? `Unpaid bills are at $${Math.round(household.unpaidBills).toLocaleString()}, and the household is under real pressure.`
+    : household.financialStatus === "strained"
+      ? `Money is tight with $${Math.round(household.sharedCash).toLocaleString()} shared and $${Math.round(household.unpaidBills).toLocaleString()} unpaid.`
+      : `The household is keeping up with bills and has $${Math.round(household.sharedCash).toLocaleString()} shared.`;
+
+  if (previousStatus !== household.financialStatus && household.financialStatus !== "stable") {
+    addFeed(sim, `${household.name} is now financially ${household.financialStatus}.`);
+  }
+
+  if (household.financialStatus === "stable") return;
+  for (const citizen of members) {
+    citizen.mood = clamp(citizen.mood - (household.financialStatus === "critical" ? 2.4 : 1.1), 0, 100);
+    citizen.needs.belonging = clamp(citizen.needs.belonging + (household.financialStatus === "critical" ? 3 : 1.2), 0, 100);
+    citizen.problems = Array.from(new Set([
+      ...citizen.problems,
+      household.financialStatus === "critical" ? "Household bills are becoming urgent." : "Household money feels tight.",
+    ]));
+    if (citizen.familyRole === "parent" || citizen.familyRole === "partner") {
+      citizen.currentThought = household.financialStatus === "critical"
+        ? "The household bills are getting urgent. I need to make careful choices."
+        : "Money at home is tight, so I should be careful today.";
+    }
+  }
 }
 
 function spendAtBuilding(sim: SimulationState, citizen: Citizen, buildingId: string, category: "market" | "clinic", amount: number, note: string) {
@@ -1253,7 +1298,8 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
       household.foodStock = clamp(household.foodStock - members.length * 4, 0, 100);
       payHouseholdCost(sim, household, "rent", household.rent / 30, `${household.name} paid daily rent.`);
       payHouseholdCost(sim, household, "living", foodCost, `${household.name} covered shared utilities and pantry basics.`);
-      household.stress = clamp(45 - household.foodStock * 0.25 + (household.sharedCash < household.rent ? 32 : 0), 0, 100);
+      updateHouseholdFinanceStatus(sim, household, members);
+      for (const citizen of members) brainUpdateEmotionAndProblems(sim, citizen);
     }
     addFeed(sim, `A new day begins with ${sim.weather.kind} weather around ${sim.weather.temperature}F.`);
   }

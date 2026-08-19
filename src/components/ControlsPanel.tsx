@@ -41,6 +41,8 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
   const townCash = sim.citizens.reduce((sum, citizen) => sum + citizen.cash, 0) + sim.households.reduce((sum, household) => sum + household.sharedCash, 0);
   const marketRevenue = sim.businessAccounts.market ?? 0;
   const clinicRevenue = sim.businessAccounts.clinic ?? 0;
+  const strainedHouseholds = sim.households.filter((household) => household.financialStatus !== "stable").length;
+  const unpaidBills = sim.households.reduce((sum, household) => sum + household.unpaidBills, 0);
 
   return (
     <aside className="panel">
@@ -120,7 +122,31 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
             <span>Clinic</span>
             <strong>${Math.round(clinicRevenue).toLocaleString()}</strong>
           </div>
+          <div>
+            <span>Strained homes</span>
+            <strong>{strainedHouseholds}</strong>
+          </div>
+          <div>
+            <span>Unpaid bills</span>
+            <strong>${Math.round(unpaidBills).toLocaleString()}</strong>
+          </div>
         </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Household Pressure" count={strainedHouseholds} defaultOpen={false}>
+        <ol className="feed-list household-money-list">
+          {sim.households
+            .slice()
+            .sort((a, b) => b.stress + b.unpaidBills * 0.05 - (a.stress + a.unpaidBills * 0.05))
+            .slice(0, 8)
+            .map((household) => (
+              <li key={household.id}>
+                <strong>{household.name} · {household.financialStatus}</strong>
+                <span>${Math.round(household.sharedCash).toLocaleString()} shared · ${Math.round(household.unpaidBills).toLocaleString()} unpaid · {Math.round(household.stress)}% stress</span>
+                <small>{household.lastMoneyNote}</small>
+              </li>
+            ))}
+        </ol>
       </CollapsibleSection>
 
       <CollapsibleSection title="Recent Money" count={sim.transactionLog.length} defaultOpen={false}>
