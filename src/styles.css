@@ -215,15 +215,23 @@ h3 {
   width: min(780px, calc(100vw - 48px));
 }
 
-.has-profile .interior-drawer {
+.has-profile .drawer-center {
   left: 12px;
   max-width: none;
   right: min(372px, calc(100vw - 48px));
   transform: none;
 }
 
-.has-profile .interior-drawer .panel {
+.has-profile .drawer-center .panel {
   margin: 0 auto;
+  width: min(720px, 100%);
+}
+
+.has-profile .interior-drawer {
+  width: auto;
+}
+
+.has-profile .interior-drawer .panel {
   width: min(780px, 100%);
 }
 
@@ -1411,11 +1419,19 @@ h3 {
     min-height: auto;
   }
 
-  .has-profile .interior-drawer {
+  .has-profile .drawer-center {
     left: 50%;
-    max-width: min(780px, calc(100vw - 48px));
+    max-width: min(720px, calc(100vw - 48px));
     right: auto;
     transform: translateX(-50%);
+  }
+
+  .has-profile .drawer-center .panel {
+    width: min(720px, calc(100vw - 48px));
+  }
+
+  .has-profile .interior-drawer {
+    max-width: min(780px, calc(100vw - 48px));
   }
 
   .has-profile .interior-drawer .panel {
