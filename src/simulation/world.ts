@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, ConversationClassification, ConversationTopic, DailyActivity, FamilyRole, Household, LifeStage, SimulationSnapshot, SimulationState, WeatherState, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, ConversationClassification, ConversationTopic, DailyActivity, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, WeatherState, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -12,7 +12,7 @@ import {
   updateEmotionAndProblems as brainUpdateEmotionAndProblems,
   updateGoalProgress as brainUpdateGoalProgress,
 } from "./brain";
-import { BUILDINGS, FACTORY_RUMOR, WALK_PIXELS_PER_SIM_MINUTE } from "./constants";
+import { BUILDINGS, FACTORY_RUMOR, PLACE_SLOTS, WALK_PIXELS_PER_SIM_MINUTE } from "./constants";
 import { clamp, mulberry32, pick } from "./random";
 import { formatTime } from "./time";
 
@@ -58,6 +58,60 @@ function centerOf(buildingId: string) {
     x: building.x + building.width / 2,
     y: building.y + building.height / 2,
   };
+}
+
+export function placeSlotById(id: string): PlaceSlot {
+  const slot = PLACE_SLOTS.find((item) => item.id === id);
+  if (!slot) throw new Error(`Unknown place slot: ${id}`);
+  return slot;
+}
+
+function slotsForBuilding(buildingId: string) {
+  return PLACE_SLOTS.filter((slot) => slot.buildingId === buildingId);
+}
+
+function firstSlot(buildingId: string) {
+  return slotsForBuilding(buildingId)[0] ?? {
+    id: `${buildingId}_entry`,
+    buildingId,
+    name: "entry",
+    kind: "entry" as const,
+    ...centerOf(buildingId),
+    radius: 18,
+  };
+}
+
+function slotForKind(buildingId: string, kinds: PlaceSlot["kind"][]) {
+  const slots = slotsForBuilding(buildingId);
+  return kinds.map((kind) => slots.find((slot) => slot.kind === kind)).find((slot) => slot !== undefined) ?? firstSlot(buildingId);
+}
+
+function chooseDestinationSlot(citizen: Citizen, destinationId: string, intention: CitizenIntention, rand: () => number) {
+  const building = buildingById(destinationId);
+  if (building.kind === "home") {
+    if (intention === "sleep" || intention === "recover") return slotForKind(destinationId, ["bedroom", "living"]);
+    if (intention === "eat") return slotForKind(destinationId, ["kitchen", "living"]);
+    if (intention === "socialize") return slotForKind(destinationId, ["living", "kitchen", "yard"]);
+    if (intention === "wander") return slotForKind(destinationId, ["yard", "living"]);
+    return slotForKind(destinationId, ["living", "kitchen", "bedroom"]);
+  }
+  if (building.kind === "school") {
+    if (citizen.institutionRole && citizen.institutionRole !== "student") return slotForKind(destinationId, ["office", "hallway", "classroom"]);
+    if (intention === "socialize" || intention === "wander") return slotForKind(destinationId, ["hallway", "yard", "classroom"]);
+    return slotForKind(destinationId, ["classroom", "hallway"]);
+  }
+  if (building.kind === "factory" || building.kind === "office") {
+    if (intention === "socialize" || intention === "eat") return slotForKind(destinationId, ["break", "entry", "work"]);
+    return slotForKind(destinationId, ["work", "break", "entry"]);
+  }
+  if (building.kind === "market") {
+    if (citizen.workplaceId === "market" && intention === "work") return slotForKind(destinationId, ["counter", "aisle"]);
+    return slotForKind(destinationId, rand() < 0.5 ? ["aisle", "counter", "entry"] : ["counter", "aisle", "entry"]);
+  }
+  if (building.kind === "clinic") {
+    return slotForKind(destinationId, intention === "work" ? ["exam", "waiting"] : ["waiting", "exam", "entry"]);
+  }
+  return firstSlot(destinationId);
 }
 
 export function buildingById(id: string): Building {
@@ -136,7 +190,7 @@ function createCitizen(
   const lifeStage = lifeStageForAge(age);
   const workplaceId = chooseWorkplace(idNumber, lifeStage, rand);
   const schoolClass = age < 11 ? "elementary" : age < 14 ? "middle" : age < 19 ? "high" : null;
-  const homePoint = centerOf(household.homeId);
+  const homeSlot = slotForKind(household.homeId, ["living", "kitchen"]);
   const punctuality = rand();
   const personality = {
     responsibility: Math.round(30 + rand() * 70),
@@ -172,11 +226,13 @@ function createCitizen(
     homeId: household.homeId,
     workplaceId,
     job: jobFor(workplaceId, lifeStage),
-    x: homePoint.x + (rand() - 0.5) * 72,
-    y: homePoint.y + (rand() - 0.5) * 42,
-    targetX: homePoint.x,
-    targetY: homePoint.y,
+    x: homeSlot.x + (rand() - 0.5) * homeSlot.radius * 2,
+    y: homeSlot.y + (rand() - 0.5) * homeSlot.radius * 2,
+    targetX: homeSlot.x,
+    targetY: homeSlot.y,
     destinationId: household.homeId,
+    currentSlotId: homeSlot.id,
+    destinationSlotId: homeSlot.id,
     mood,
     cash,
     energy,
@@ -588,14 +644,15 @@ function updateCareerProgress(sim: SimulationState, citizen: Citizen) {
   }
 }
 
-function setDestination(citizen: Citizen, destinationId: string, rand: () => number) {
-  const building = buildingById(destinationId);
+function setDestination(citizen: Citizen, destinationId: string, rand: () => number, intention: CitizenIntention = citizen.currentIntention) {
+  const slot = chooseDestinationSlot(citizen, destinationId, intention, rand);
   if (citizen.destinationId === destinationId && Math.hypot(citizen.targetX - citizen.x, citizen.targetY - citizen.y) > 7) {
     return;
   }
   citizen.destinationId = destinationId;
-  citizen.targetX = building.x + building.width * (0.2 + rand() * 0.6);
-  citizen.targetY = building.y + building.height * (0.25 + rand() * 0.55);
+  citizen.destinationSlotId = slot.id;
+  citizen.targetX = slot.x + (rand() - 0.5) * slot.radius * 1.6;
+  citizen.targetY = slot.y + (rand() - 0.5) * slot.radius * 1.6;
 }
 
 function updateSchedule(sim: SimulationState, citizen: Citizen) {
@@ -621,7 +678,7 @@ function updateSchedule(sim: SimulationState, citizen: Citizen) {
         ? 55
         : 35;
   citizen.committedUntil = tick + commitmentMinutes;
-  setDestination(citizen, decision.destinationId, rand);
+  setDestination(citizen, decision.destinationId, rand, decision.intention);
   const actualIntention = decision.reasoning.authority.outcome === "guided" || decision.reasoning.authority.outcome === "blocked"
     ? decision.reasoning.alternatives[0]?.intention ?? decision.intention
     : decision.intention;
@@ -640,6 +697,9 @@ function moveCitizen(citizen: Citizen, simMinutes: number) {
   const step = Math.min(distance, simMinutes * WALK_PIXELS_PER_SIM_MINUTE * citizen.routine.walkingSpeed);
   citizen.x += (dx / distance) * step;
   citizen.y += (dy / distance) * step;
+  if (distance <= step + 1) {
+    citizen.currentSlotId = citizen.destinationSlotId;
+  }
 }
 
 function isWeatherExposed(citizen: Citizen) {
@@ -719,9 +779,16 @@ function applyPersonalSpace(citizens: Citizen[]) {
   }
 }
 
+function effectiveSlot(citizen: Citizen) {
+  return isAtDestination(citizen) ? placeSlotById(citizen.destinationSlotId) : placeSlotById(citizen.currentSlotId);
+}
+
 function conversationLocation(a: Citizen, b: Citizen) {
-  const id = a.destinationId === b.destinationId ? a.destinationId : Math.hypot(a.x - b.x, a.y - b.y) < 24 ? a.destinationId : b.destinationId;
-  return buildingById(id);
+  const slot = a.destinationSlotId === b.destinationSlotId ? placeSlotById(a.destinationSlotId) : Math.hypot(a.x - b.x, a.y - b.y) < 24 ? effectiveSlot(a) : effectiveSlot(b);
+  return {
+    building: buildingById(slot.buildingId),
+    slot,
+  };
 }
 
 function isAtDestination(citizen: Citizen) {
@@ -745,25 +812,28 @@ function conversationContext(a: Citizen, b: Citizen): { zone: "home" | "work" | 
   const bMoving = !isAtDestination(b);
   const bothMoving = aMoving && bMoving;
   if (bothMoving && distance > 24) return null;
+  const aSlot = effectiveSlot(a);
+  const bSlot = effectiveSlot(b);
+  const sameSlot = aSlot.id === bSlot.id;
 
   if (a.householdId === b.householdId && a.destinationId === a.homeId && b.destinationId === b.homeId) {
     const home = buildingById(a.homeId);
-    if (buildingContains(a, home, 36) && buildingContains(b, home, 36)) return { zone: "home", multiplier: 2.4 };
+    if (buildingContains(a, home, 36) && buildingContains(b, home, 36)) return { zone: "home", multiplier: sameSlot ? 3 : 2.2 };
   }
 
   if (a.destinationId === "school" && b.destinationId === "school") {
     const school = buildingById("school");
-    if (buildingContains(a, school, 34) && buildingContains(b, school, 34)) return { zone: "school", multiplier: 1.9 };
+    if (buildingContains(a, school, 34) && buildingContains(b, school, 34)) return { zone: "school", multiplier: sameSlot ? 2.4 : 1.5 };
   }
 
   if (a.workplaceId && a.workplaceId === b.workplaceId && a.destinationId === a.workplaceId && b.destinationId === b.workplaceId) {
     const workplace = buildingById(a.workplaceId);
-    if (buildingContains(a, workplace, 34) && buildingContains(b, workplace, 34)) return { zone: "work", multiplier: 1.8 };
+    if (buildingContains(a, workplace, 34) && buildingContains(b, workplace, 34)) return { zone: "work", multiplier: sameSlot ? 2.2 : 1.35 };
   }
 
   if (a.destinationId === b.destinationId && ["market", "clinic"].includes(a.destinationId)) {
     const place = buildingById(a.destinationId);
-    if (buildingContains(a, place, 42) && buildingContains(b, place, 42)) return { zone: "public", multiplier: 1.6 };
+    if (buildingContains(a, place, 42) && buildingContains(b, place, 42)) return { zone: "public", multiplier: sameSlot ? 2 : 1.25 };
   }
 
   if (distance < 26 && !bothMoving) return { zone: "street", multiplier: 0.9 };
@@ -800,8 +870,10 @@ function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, top
     topic,
     classification,
     classificationReason,
-    locationId: location.id,
-    locationName: location.name,
+    locationId: location.building.id,
+    locationName: location.building.name,
+    locationSlotId: location.slot.id,
+    locationSlotName: location.slot.name,
     text,
   });
   sim.conversationLog = sim.conversationLog.slice(0, 240);

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Citizen, SimulationState } from "../types/simulation";
 import { FACTORY_RUMOR } from "../simulation/constants";
 import { formatTime } from "../simulation/time";
-import { buildingById } from "../simulation/world";
+import { buildingById, placeSlotById } from "../simulation/world";
 
 type CitizenProfileProps = {
   citizen: Citizen;
@@ -46,6 +46,9 @@ function titleCase(text: string) {
 export function CitizenProfile({ citizen, sim, onSelectCitizen }: CitizenProfileProps) {
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const workplace = citizen.workplaceId ? buildingById(citizen.workplaceId) : null;
+  const currentSlot = placeSlotById(citizen.currentSlotId);
+  const destinationSlot = placeSlotById(citizen.destinationSlotId);
+  const distanceToTarget = Math.hypot(citizen.targetX - citizen.x, citizen.targetY - citizen.y);
   const householdMembers = household?.memberIds
     .map((id) => sim.citizens.find((item) => item.id === id))
     .filter((item) => item !== undefined);
@@ -90,6 +93,11 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen }: CitizenProfile
           <span>Emotion</span>
           <strong>{citizen.currentEmotion}</strong>
         </div>
+      </div>
+
+      <div className="routine-line">
+        <span>{distanceToTarget < 18 ? "At" : "Going to"} {buildingById(citizen.destinationId).name}</span>
+        <strong>{distanceToTarget < 18 ? currentSlot.name : destinationSlot.name}</strong>
       </div>
 
       <div className="routine-line">

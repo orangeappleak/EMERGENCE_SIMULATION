@@ -17,6 +17,7 @@ function matches(entry: ConversationEntry, query: string) {
     entry.topic,
     entry.classification,
     entry.locationName,
+    entry.locationSlotName,
     entry.text,
   ].join(" ").toLowerCase();
   return text.includes(query);
@@ -100,7 +101,7 @@ export function ConversationsBrowser({ sim, onSelectCitizen }: ConversationsBrow
                     <li key={entry.id}>
                       <div className="conversation-meta">
                         <strong>{entry.time}</strong>
-                        <span>{entry.locationName}</span>
+                        <span>{entry.locationName}{entry.locationSlotName ? ` · ${entry.locationSlotName}` : ""}</span>
                       </div>
                       <div className="conversation-people">
                         <button type="button" onClick={() => entry.speakerId && onSelectCitizen(entry.speakerId)}>

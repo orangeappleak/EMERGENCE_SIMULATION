@@ -30,6 +30,7 @@ http://localhost:5173
 - 50 procedural citizens
 - 10 homes, households, families, children, teens, elders, roommates
 - school, factory, office, market, and clinic
+- named place slots inside buildings for homes, school, workplaces, market, and clinic
 - visible commute movement
 - relationships with familiarity, friendship, trust, and dislike
 - stronger family and household relationships
@@ -45,6 +46,7 @@ http://localhost:5173
 - factory collapse experiment
 - clickable citizen profile panel
 - searchable people browser with clickable relationships
+- precise citizen location labels, like `Maple House · kitchen`
 - real pixel assets from `emergence_assets/Tiny Village Pack`
 - tile-style map layer with roads, sidewalks, paths, lots, and props
 - drag-to-pan camera

@@ -1,6 +1,6 @@
 import * as PIXI from "pixi.js";
 import type { Citizen, SimulationState } from "../types/simulation";
-import { BUILDINGS, FACTORY_RUMOR } from "../simulation/constants";
+import { BUILDINGS, FACTORY_RUMOR, PLACE_SLOTS } from "../simulation/constants";
 import { GAME_ASSETS } from "./assets";
 
 export const WORLD_WIDTH = 1440;
@@ -181,6 +181,13 @@ function drawStaticWorld(stage: PIXI.Container, textures: Record<string, PIXI.Te
 
     stage.addChild(makeLabel(building.name, building.x + 8, building.y - 16));
   }
+
+  const slotLayer = new PIXI.Graphics();
+  for (const slot of PLACE_SLOTS) {
+    const color = slot.kind === "yard" || slot.kind === "entry" ? 0x7f9a79 : 0xf1ead2;
+    slotLayer.circle(slot.x, slot.y, Math.max(3, Math.min(7, slot.radius * 0.28))).fill({ color, alpha: 0.42 });
+  }
+  stage.addChild(slotLayer);
 }
 
 function timeLight(minute: number) {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Citizen, SimulationState } from "../types/simulation";
-import { buildingById } from "../simulation/world";
+import { buildingById, placeSlotById } from "../simulation/world";
 
 type PeopleBrowserProps = {
   sim: SimulationState;
@@ -45,6 +45,7 @@ function searchText(citizen: Citizen) {
     workplaceName(citizen),
     citizen.currentThought,
     citizen.goalFocus,
+    placeSlotById(citizen.destinationSlotId).name,
     ...citizen.personalGoals.map((goal) => `${goal.title} ${goal.reason}`),
   ].join(" ").toLowerCase();
 }
@@ -101,7 +102,7 @@ export function PeopleBrowser({ sim, selectedCitizenId, onSelectCitizen }: Peopl
             >
               <span>
                 <strong>{citizen.name}</strong>
-                <small>{citizen.job} · {buildingById(citizen.homeId).name}</small>
+                <small>{citizen.job} · {buildingById(citizen.destinationId).name} · {placeSlotById(citizen.destinationSlotId).name}</small>
               </span>
               <em>{Math.round(citizen.mood)}%</em>
             </button>

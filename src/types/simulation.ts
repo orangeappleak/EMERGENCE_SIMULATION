@@ -11,6 +11,18 @@ export type Building = {
   color: string;
 };
 
+export type PlaceSlotKind = "entry" | "living" | "kitchen" | "bedroom" | "yard" | "classroom" | "hallway" | "office" | "work" | "break" | "counter" | "aisle" | "waiting" | "exam";
+
+export type PlaceSlot = {
+  id: string;
+  buildingId: string;
+  name: string;
+  kind: PlaceSlotKind;
+  x: number;
+  y: number;
+  radius: number;
+};
+
 export type Relationship = {
   friendship: number;
   trust: number;
@@ -128,6 +140,8 @@ export type ConversationEntry = {
   classificationReason?: string;
   locationId?: string;
   locationName?: string;
+  locationSlotId?: string;
+  locationSlotName?: string;
   text: string;
 };
 
@@ -173,6 +187,8 @@ export type Citizen = {
   targetX: number;
   targetY: number;
   destinationId: string;
+  currentSlotId: string;
+  destinationSlotId: string;
   mood: number;
   cash: number;
   energy: number;

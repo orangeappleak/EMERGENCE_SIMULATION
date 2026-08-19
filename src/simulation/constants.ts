@@ -1,4 +1,4 @@
-import type { Building } from "../types/simulation";
+import type { Building, PlaceSlot, PlaceSlotKind } from "../types/simulation";
 
 export const FACTORY_RUMOR = "factory_layoffs_may_happen";
 
@@ -21,3 +21,52 @@ export const BUILDINGS: Building[] = [
   { id: "clinic", name: "Clinic", kind: "clinic", x: 920, y: 505, width: 92, height: 100, color: "#c46262" },
   { id: "school", name: "Northbridge School", kind: "school", x: 1040, y: 430, width: 210, height: 110, color: "#b68b4f" },
 ];
+
+const homeSlotPlan: Array<{ kind: PlaceSlotKind; name: string; x: number; y: number; radius: number }> = [
+  { kind: "living", name: "living room", x: 0.5, y: 0.55, radius: 18 },
+  { kind: "kitchen", name: "kitchen", x: 0.28, y: 0.42, radius: 14 },
+  { kind: "bedroom", name: "bedroom", x: 0.72, y: 0.34, radius: 14 },
+  { kind: "yard", name: "front yard", x: 0.5, y: 1.12, radius: 20 },
+];
+
+const slotPlans: Record<Building["kind"], Array<{ kind: PlaceSlotKind; name: string; x: number; y: number; radius: number }>> = {
+  home: homeSlotPlan,
+  factory: [
+    { kind: "work", name: "factory floor", x: 0.42, y: 0.62, radius: 30 },
+    { kind: "break", name: "break area", x: 0.74, y: 0.42, radius: 18 },
+    { kind: "entry", name: "loading entrance", x: 0.15, y: 0.85, radius: 18 },
+  ],
+  market: [
+    { kind: "counter", name: "front counter", x: 0.38, y: 0.68, radius: 16 },
+    { kind: "aisle", name: "shop aisle", x: 0.66, y: 0.5, radius: 22 },
+    { kind: "entry", name: "market entrance", x: 0.5, y: 1.1, radius: 18 },
+  ],
+  office: [
+    { kind: "work", name: "desk area", x: 0.45, y: 0.6, radius: 24 },
+    { kind: "break", name: "coffee corner", x: 0.72, y: 0.42, radius: 15 },
+    { kind: "entry", name: "office lobby", x: 0.25, y: 0.84, radius: 17 },
+  ],
+  clinic: [
+    { kind: "waiting", name: "waiting room", x: 0.46, y: 0.68, radius: 18 },
+    { kind: "exam", name: "exam room", x: 0.66, y: 0.38, radius: 14 },
+    { kind: "entry", name: "clinic entrance", x: 0.5, y: 1.1, radius: 14 },
+  ],
+  school: [
+    { kind: "classroom", name: "classroom", x: 0.35, y: 0.58, radius: 26 },
+    { kind: "hallway", name: "hallway", x: 0.6, y: 0.55, radius: 20 },
+    { kind: "office", name: "school office", x: 0.78, y: 0.42, radius: 16 },
+    { kind: "yard", name: "school yard", x: 0.5, y: 1.18, radius: 28 },
+  ],
+};
+
+export const PLACE_SLOTS: PlaceSlot[] = BUILDINGS.flatMap((building) => (
+  slotPlans[building.kind].map((slot) => ({
+    id: `${building.id}_${slot.kind}`,
+    buildingId: building.id,
+    name: slot.name,
+    kind: slot.kind,
+    x: Math.round(building.x + building.width * slot.x),
+    y: Math.round(building.y + building.height * slot.y),
+    radius: slot.radius,
+  }))
+));

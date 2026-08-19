@@ -12,7 +12,7 @@ import type {
   PersonalGoalKind,
   SimulationState,
 } from "../types/simulation";
-import { BUILDINGS, FACTORY_RUMOR } from "./constants";
+import { BUILDINGS, FACTORY_RUMOR, PLACE_SLOTS } from "./constants";
 import { clamp, mulberry32, pick } from "./random";
 import { formatTime } from "./time";
 
@@ -25,6 +25,10 @@ function buildingById(id: string) {
   const building = BUILDINGS.find((item) => item.id === id);
   if (!building) throw new Error(`Unknown building: ${id}`);
   return building;
+}
+
+function placeSlotById(id: string) {
+  return PLACE_SLOTS.find((item) => item.id === id);
 }
 
 function personalMoneyPressure(citizen: Citizen) {
@@ -221,6 +225,8 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen) {
       home: buildingById(citizen.homeId).name,
       workplace: citizen.workplaceId ? buildingById(citizen.workplaceId).name : null,
       destination: buildingById(citizen.destinationId).name,
+      currentSlot: placeSlotById(citizen.currentSlotId)?.name ?? "unknown spot",
+      destinationSlot: placeSlotById(citizen.destinationSlotId)?.name ?? "unknown spot",
       currentThought: citizen.currentThought,
       currentEmotion: citizen.currentEmotion,
       currentIntention: citizen.currentIntention,
