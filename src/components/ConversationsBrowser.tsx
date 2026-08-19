@@ -4,6 +4,7 @@ import type { ConversationClassification, ConversationEntry, ConversationTopic, 
 type ConversationsBrowserProps = {
   sim: SimulationState;
   onSelectCitizen: (citizenId: string) => void;
+  onClose: () => void;
 };
 
 const CLASSIFICATIONS: Array<"all" | ConversationClassification> = ["all", "casual", "serious", "secretive", "supportive", "planning"];
@@ -27,7 +28,7 @@ function label(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export function ConversationsBrowser({ sim, onSelectCitizen }: ConversationsBrowserProps) {
+export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: ConversationsBrowserProps) {
   const [query, setQuery] = useState("");
   const [classification, setClassification] = useState<"all" | ConversationClassification>("all");
   const [topic, setTopic] = useState<"all" | ConversationTopic>("all");
@@ -57,7 +58,10 @@ export function ConversationsBrowser({ sim, onSelectCitizen }: ConversationsBrow
     <aside className="panel conversations-panel">
       <div className="panel-title-row">
         <h2>Conversations</h2>
-        <span className="status-badge">{conversations.length}</span>
+        <div className="panel-title-actions">
+          <span className="status-badge">{conversations.length}</span>
+          <button className="panel-close" type="button" onClick={onClose} aria-label="Close conversations panel">Close</button>
+        </div>
       </div>
 
       <input

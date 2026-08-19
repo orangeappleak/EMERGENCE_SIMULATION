@@ -6,9 +6,10 @@ type ControlsPanelProps = {
   onSetSpeed: (speed: number) => void;
   onSeedRumor: () => void;
   onCollapseFactory: () => void;
+  onClose: () => void;
 };
 
-export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, onCollapseFactory }: ControlsPanelProps) {
+export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, onCollapseFactory, onClose }: ControlsPanelProps) {
   const students = sim.citizens.filter((citizen) => citizen.schoolClass).length;
   const teachers = sim.citizens.filter((citizen) => citizen.institutionRole?.includes("teacher")).length;
   const schoolStaff = sim.citizens.filter((citizen) => citizen.workplaceId === "school").length;
@@ -20,7 +21,10 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
     <aside className="panel">
       <div className="panel-title-row">
         <h2>Controls</h2>
-        <span className="status-badge">{sim.paused ? "Paused" : "Live"}</span>
+        <div className="panel-title-actions">
+          <span className="status-badge">{sim.paused ? "Paused" : "Live"}</span>
+          <button className="panel-close" type="button" onClick={onClose} aria-label="Close controls panel">Close</button>
+        </div>
       </div>
 
       <div className="button-grid">

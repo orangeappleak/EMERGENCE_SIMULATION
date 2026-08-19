@@ -96,6 +96,7 @@ export default function App() {
               onSetSpeed={simulation.setSpeed}
               onSeedRumor={simulation.seedRumor}
               onCollapseFactory={simulation.collapseFactory}
+              onClose={() => setControlsOpen(false)}
             />
           </div>
         ) : null}
@@ -109,6 +110,7 @@ export default function App() {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
               }}
+              onClose={() => setPeopleOpen(false)}
             />
           </div>
         ) : null}
@@ -121,6 +123,7 @@ export default function App() {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
               }}
+              onClose={() => setConversationsOpen(false)}
             />
           </div>
         ) : null}
@@ -164,6 +167,7 @@ export default function App() {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
               }}
+              onClose={() => setProfileOpen(false)}
             />
           </div>
         ) : null}

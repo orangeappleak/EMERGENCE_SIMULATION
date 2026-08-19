@@ -59,7 +59,7 @@ export function BuildingInterior({ buildingId, sim, onClose, onSelectCitizen }: 
           <h2>{building.name}</h2>
           <p className="muted">{layout.name} · {citizensInside.length} inside or heading in</p>
         </div>
-        <button type="button" onClick={onClose}>Close</button>
+        <button className="panel-close" type="button" onClick={onClose} aria-label="Close building panel">Close</button>
       </div>
 
       <div className="interior-map" aria-label="Interior floorplan">

@@ -254,7 +254,22 @@ h3 {
 .panel-title-row {
   align-items: center;
   display: flex;
+  gap: 10px;
   justify-content: space-between;
+}
+
+.panel-title-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.panel-close {
+  background: #f6f7f7;
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 9px;
 }
 
 .status-badge {

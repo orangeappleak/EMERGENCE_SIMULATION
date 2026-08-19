@@ -8,6 +8,7 @@ type CitizenProfileProps = {
   citizen: Citizen;
   sim: SimulationState;
   onSelectCitizen: (citizenId: string) => void;
+  onClose: () => void;
 };
 
 type CollapsibleSectionProps = {
@@ -43,7 +44,7 @@ function titleCase(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export function CitizenProfile({ citizen, sim, onSelectCitizen }: CitizenProfileProps) {
+export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: CitizenProfileProps) {
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const workplace = citizen.workplaceId ? buildingById(citizen.workplaceId) : null;
   const currentSlot = placeSlotById(citizen.currentSlotId);
@@ -67,7 +68,10 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen }: CitizenProfile
 
   return (
     <aside className="panel profile-panel">
-      <h2>{citizen.name}</h2>
+      <div className="panel-title-row">
+        <h2>{citizen.name}</h2>
+        <button className="panel-close" type="button" onClick={onClose} aria-label="Close person panel">Close</button>
+      </div>
       <p className="muted">
         Age {citizen.age}. {citizen.familyRole}. {citizen.job}. Lives at {buildingById(citizen.homeId).name}.
       </p>

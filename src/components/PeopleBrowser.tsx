@@ -6,6 +6,7 @@ type PeopleBrowserProps = {
   sim: SimulationState;
   selectedCitizenId: string;
   onSelectCitizen: (citizenId: string) => void;
+  onClose: () => void;
 };
 
 const FILTERS = [
@@ -50,7 +51,7 @@ function searchText(citizen: Citizen) {
   ].join(" ").toLowerCase();
 }
 
-export function PeopleBrowser({ sim, selectedCitizenId, onSelectCitizen }: PeopleBrowserProps) {
+export function PeopleBrowser({ sim, selectedCitizenId, onSelectCitizen, onClose }: PeopleBrowserProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
   const normalizedQuery = query.trim().toLowerCase();
@@ -66,7 +67,10 @@ export function PeopleBrowser({ sim, selectedCitizenId, onSelectCitizen }: Peopl
     <aside className="panel people-panel">
       <div className="panel-title-row">
         <h2>People</h2>
-        <span className="status-badge">{people.length}</span>
+        <div className="panel-title-actions">
+          <span className="status-badge">{people.length}</span>
+          <button className="panel-close" type="button" onClick={onClose} aria-label="Close people panel">Close</button>
+        </div>
       </div>
 
       <input
