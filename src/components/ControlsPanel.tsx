@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 import type { SimulationState } from "../types/simulation";
 
 type ControlsPanelProps = {
@@ -8,6 +9,27 @@ type ControlsPanelProps = {
   onCollapseFactory: () => void;
   onClose: () => void;
 };
+
+type CollapsibleSectionProps = {
+  title: string;
+  count?: number;
+  defaultOpen?: boolean;
+  children: ReactNode;
+};
+
+function CollapsibleSection({ title, count, defaultOpen = true, children }: CollapsibleSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className={`panel-section collapsible-section ${open ? "is-open" : ""}`}>
+      <button className="section-toggle" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <span>{title}</span>
+        <strong>{count !== undefined ? count : open ? "Hide" : "Show"}</strong>
+      </button>
+      {open ? <div className="section-content">{children}</div> : null}
+    </div>
+  );
+}
 
 export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, onCollapseFactory, onClose }: ControlsPanelProps) {
   const students = sim.citizens.filter((citizen) => citizen.schoolClass).length;
@@ -51,8 +73,7 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
         Collapse Factory
       </button>
 
-      <div className="panel-section town-section">
-        <h3>Town</h3>
+      <CollapsibleSection title="Town">
         <div className="town-facts">
           <div>
             <span>Homes</span>
@@ -79,10 +100,9 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
             <strong>{schoolStaff}</strong>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel-section town-section">
-        <h3>Economy</h3>
+      <CollapsibleSection title="Economy">
         <div className="town-facts">
           <div>
             <span>Town cash</span>
@@ -101,10 +121,9 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
             <strong>${Math.round(clinicRevenue).toLocaleString()}</strong>
           </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel-section">
-        <h3>Recent Money</h3>
+      <CollapsibleSection title="Recent Money" count={sim.transactionLog.length} defaultOpen={false}>
         <ol className="feed-list transaction-list">
           {(sim.transactionLog.length ? sim.transactionLog.slice(0, 8) : []).map((entry) => (
             <li key={entry.id}>
@@ -115,10 +134,9 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
           ))}
           {!sim.transactionLog.length ? <li>No money has moved yet.</li> : null}
         </ol>
-      </div>
+      </CollapsibleSection>
 
-      <div className="panel-section">
-        <h3>World Feed</h3>
+      <CollapsibleSection title="World Feed" count={sim.feed.length} defaultOpen={false}>
         <ol className="feed-list">
           {sim.feed.map((event) => (
             <li key={event.id}>
@@ -126,7 +144,7 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
             </li>
           ))}
         </ol>
-      </div>
+      </CollapsibleSection>
     </aside>
   );
 }

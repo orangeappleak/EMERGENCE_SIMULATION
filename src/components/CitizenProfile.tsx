@@ -45,6 +45,7 @@ function titleCase(text: string) {
 }
 
 export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: CitizenProfileProps) {
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const workplace = citizen.workplaceId ? buildingById(citizen.workplaceId) : null;
   const currentSlot = placeSlotById(citizen.currentSlotId);
@@ -67,7 +68,7 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
     .slice(0, 5);
   const recentTransactions = sim.transactionLog
     .filter((entry) => entry.citizenId === citizen.id || entry.householdId === citizen.householdId)
-    .slice(0, 8);
+  const visibleTransactions = showAllTransactions ? recentTransactions : recentTransactions.slice(0, 8);
 
   return (
     <aside className="panel profile-panel">
@@ -356,8 +357,13 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
       </div>
 
       <CollapsibleSection title="Recent Money" count={recentTransactions.length} defaultOpen>
+        {recentTransactions.length ? (
+          <button className="ledger-toggle" type="button" onClick={() => setShowAllTransactions((value) => !value)}>
+            {showAllTransactions ? "Show recent" : "Show all ledger"}
+          </button>
+        ) : null}
         <ul className="detail-list transaction-list">
-          {(recentTransactions.length ? recentTransactions : [{
+          {(visibleTransactions.length ? visibleTransactions : [{
             id: "empty",
             time: formatTime(sim.minute),
             amount: 0,

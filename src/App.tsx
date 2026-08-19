@@ -6,6 +6,7 @@ import { ControlsPanel } from "./components/ControlsPanel";
 import { MetricsBar } from "./components/MetricsBar";
 import { PeopleBrowser } from "./components/PeopleBrowser";
 import { PixiWorld } from "./components/PixiWorld";
+import { TransactionsBrowser } from "./components/TransactionsBrowser";
 import { useSimulation } from "./state/useSimulation";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
   const [controlsOpen, setControlsOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [conversationsOpen, setConversationsOpen] = useState(false);
+  const [transactionsOpen, setTransactionsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
@@ -54,6 +56,8 @@ export default function App() {
               setControlsOpen((open) => !open);
               setPeopleOpen(false);
               setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setSelectedBuildingId(null);
             }}
           >
             {controlsOpen ? "Hide Controls" : "Controls"}
@@ -64,6 +68,8 @@ export default function App() {
               setPeopleOpen((open) => !open);
               setControlsOpen(false);
               setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setSelectedBuildingId(null);
             }}
           >
             {peopleOpen ? "Hide People" : "People"}
@@ -74,9 +80,23 @@ export default function App() {
               setConversationsOpen((open) => !open);
               setControlsOpen(false);
               setPeopleOpen(false);
+              setTransactionsOpen(false);
+              setSelectedBuildingId(null);
             }}
           >
             {conversationsOpen ? "Hide Conversations" : "Conversations"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTransactionsOpen((open) => !open);
+              setControlsOpen(false);
+              setPeopleOpen(false);
+              setConversationsOpen(false);
+              setSelectedBuildingId(null);
+            }}
+          >
+            {transactionsOpen ? "Hide Transactions" : "Transactions"}
           </button>
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
@@ -128,6 +148,15 @@ export default function App() {
           </div>
         ) : null}
 
+        {transactionsOpen ? (
+          <div className="drawer drawer-center">
+            <TransactionsBrowser
+              sim={simulation.sim}
+              onClose={() => setTransactionsOpen(false)}
+            />
+          </div>
+        ) : null}
+
         <PixiWorld
           sim={simulation.sim}
           selectedCitizenId={simulation.selectedCitizenId}
@@ -141,6 +170,7 @@ export default function App() {
             setControlsOpen(false);
             setPeopleOpen(false);
             setConversationsOpen(false);
+            setTransactionsOpen(false);
           }}
         />
 
