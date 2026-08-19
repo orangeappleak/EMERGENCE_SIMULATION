@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -458,6 +458,7 @@ export function createSimulation(): SimulationState {
       reason: "Major autonomous behavior needs a visible history before AI and leadership systems arrive.",
       effect: "Important citizen, household, and civic events will appear in the World Decisions panel.",
     }],
+    civicIssues: [],
     transactionLog: [],
     businessAccounts: {
       factory: 18000,
@@ -566,6 +567,167 @@ function addWorldDecision(sim: SimulationState, decision: Omit<WorldDecision, "i
     ...decision,
   });
   sim.worldDecisions = sim.worldDecisions.slice(0, 220);
+}
+
+function issueStatusFor(severity: number): CivicIssueStatus {
+  if (severity >= 75) return "urgent";
+  if (severity >= 42) return "active";
+  return "watching";
+}
+
+function upsertCivicIssue(
+  sim: SimulationState,
+  issue: Omit<CivicIssue, "firstSeenDay" | "lastUpdatedDay" | "lastUpdatedTime" | "status">,
+) {
+  const previous = sim.civicIssues.find((item) => item.id === issue.id);
+  const status = issueStatusFor(issue.severity);
+  if (previous) {
+    const previousStatus = previous.status;
+    previous.title = issue.title;
+    previous.kind = issue.kind;
+    previous.status = status;
+    previous.severity = issue.severity;
+    previous.awareness = issue.awareness;
+    previous.affectedCitizenIds = issue.affectedCitizenIds;
+    previous.evidence = issue.evidence;
+    previous.lastUpdatedDay = sim.day;
+    previous.lastUpdatedTime = formatTime(sim.minute);
+    if (previousStatus !== status && status !== "watching") {
+      addWorldDecision(sim, {
+        category: "civic",
+        status: "automatic",
+        impact: status === "urgent" ? "high" : "medium",
+        title: `${issue.title} became ${status}`,
+        summary: issue.evidence[0] ?? "The town recognized a repeated pattern.",
+        relatedCitizenIds: issue.affectedCitizenIds,
+        requiresApproval: false,
+        reason: "The issue detector saw a civic pressure threshold change.",
+        effect: "This issue can later become proposal fuel for leaders, meetings, or institutions.",
+      });
+    }
+    return;
+  }
+
+  sim.civicIssues.unshift({
+    ...issue,
+    status,
+    firstSeenDay: sim.day,
+    lastUpdatedDay: sim.day,
+    lastUpdatedTime: formatTime(sim.minute),
+  });
+  addWorldDecision(sim, {
+    category: "civic",
+    status: "automatic",
+    impact: status === "urgent" ? "high" : "medium",
+    title: `${issue.title} entered the civic agenda`,
+    summary: issue.evidence[0] ?? "The town recognized a repeated pattern.",
+    relatedCitizenIds: issue.affectedCitizenIds,
+    requiresApproval: false,
+    reason: "A recurring town problem became visible enough to track.",
+    effect: "Citizens can later talk, rally, or propose solutions around this issue.",
+  });
+}
+
+function detectCivicIssues(sim: SimulationState) {
+  const strainedHouseholds = sim.households.filter((household) => household.financialStatus !== "stable");
+  const unpaidBills = sim.households.reduce((sum, household) => sum + household.unpaidBills, 0);
+  const moneyStressTalks = sim.conversationLog.filter((entry) => entry.day === sim.day && entry.topic === "money stress").length;
+  const clinicTransactions = sim.transactionLog.filter((entry) => entry.day === sim.day && entry.category === "clinic").length;
+  const clinicShortfalls = sim.transactionLog.filter((entry) => entry.day === sim.day && entry.category === "clinic" && entry.note.includes("could not afford")).length;
+  const unemployed = sim.citizens.filter((citizen) => !citizen.workplaceId && !citizen.schoolClass && citizen.lifeStage !== "child" && citizen.lifeStage !== "elder");
+  const lowFoodHouseholds = sim.households.filter((household) => household.foodStock < 35);
+  const schoolTrouble = sim.citizens.filter((citizen) => citizen.schoolProgress && (citizen.schoolProgress.attendance < 55 || citizen.schoolProgress.grades < 45));
+  const seriousTownTalk = sim.conversationLog.filter((entry) => entry.day === sim.day && (entry.classification === "serious" || entry.classification === "planning")).length;
+
+  if (strainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) {
+    const affected = strainedHouseholds.flatMap((household) => household.memberIds);
+    upsertCivicIssue(sim, {
+      id: "money-strain",
+      kind: "money",
+      title: "Household financial strain",
+      severity: clamp(strainedHouseholds.length * 18 + unpaidBills * 0.02 + moneyStressTalks * 3, 20, 100),
+      awareness: clamp(moneyStressTalks * 9 + strainedHouseholds.length * 7, 8, 100),
+      affectedCitizenIds: affected,
+      evidence: [
+        `${strainedHouseholds.length} households are strained or critical.`,
+        `$${Math.round(unpaidBills).toLocaleString()} in unpaid household bills exists across town.`,
+        `${moneyStressTalks} money-stress conversations happened today.`,
+      ],
+    });
+  }
+
+  if (clinicTransactions >= 4 || clinicShortfalls > 0) {
+    upsertCivicIssue(sim, {
+      id: "clinic-access",
+      kind: "healthcare",
+      title: "Clinic access pressure",
+      severity: clamp(clinicTransactions * 10 + clinicShortfalls * 24, 22, 100),
+      awareness: clamp(clinicTransactions * 8 + clinicShortfalls * 16, 8, 100),
+      affectedCitizenIds: sim.transactionLog
+        .filter((entry) => entry.day === sim.day && entry.category === "clinic" && entry.citizenId)
+        .map((entry) => entry.citizenId as string),
+      evidence: [
+        `${clinicTransactions} clinic payments happened today.`,
+        clinicShortfalls ? `${clinicShortfalls} clinic visits could not be fully paid.` : "Clinic demand is becoming visible.",
+      ],
+    });
+  }
+
+  if (unemployed.length >= 3 || sim.factoryClosed) {
+    upsertCivicIssue(sim, {
+      id: "employment-gap",
+      kind: "employment",
+      title: "Employment instability",
+      severity: clamp(unemployed.length * 13 + (sim.factoryClosed ? 25 : 0), 20, 100),
+      awareness: clamp(unemployed.length * 8 + (sim.factoryClosed ? 30 : 0), 8, 100),
+      affectedCitizenIds: unemployed.map((citizen) => citizen.id),
+      evidence: [
+        `${unemployed.length} working-age adults do not have a workplace.`,
+        sim.factoryClosed ? "Northbridge Works has closed." : "Job gaps are becoming noticeable.",
+      ],
+    });
+  }
+
+  if (lowFoodHouseholds.length >= 2) {
+    upsertCivicIssue(sim, {
+      id: "food-security",
+      kind: "food",
+      title: "Food security concern",
+      severity: clamp(lowFoodHouseholds.length * 16, 18, 100),
+      awareness: clamp(lowFoodHouseholds.length * 9 + moneyStressTalks * 2, 8, 100),
+      affectedCitizenIds: lowFoodHouseholds.flatMap((household) => household.memberIds),
+      evidence: [`${lowFoodHouseholds.length} households have low food stock.`],
+    });
+  }
+
+  if (schoolTrouble.length >= 3) {
+    upsertCivicIssue(sim, {
+      id: "school-strain",
+      kind: "education",
+      title: "Student support strain",
+      severity: clamp(schoolTrouble.length * 11, 20, 100),
+      awareness: clamp(schoolTrouble.length * 7 + seriousTownTalk * 2, 8, 100),
+      affectedCitizenIds: schoolTrouble.map((citizen) => citizen.id),
+      evidence: [`${schoolTrouble.length} students show attendance or grade trouble.`],
+    });
+  }
+
+  if (seriousTownTalk >= 8 || sim.civicIssues.filter((issue) => issue.status !== "resolved").length >= 3) {
+    upsertCivicIssue(sim, {
+      id: "governance-gap",
+      kind: "governance",
+      title: "No shared civic leadership",
+      severity: clamp(seriousTownTalk * 4 + sim.civicIssues.length * 10, 22, 100),
+      awareness: clamp(seriousTownTalk * 5 + sim.civicIssues.length * 8, 10, 100),
+      affectedCitizenIds: sim.citizens
+        .filter((citizen) => citizen.personality.responsibility > 55 || citizen.personality.sociability > 60)
+        .map((citizen) => citizen.id),
+      evidence: [
+        `${seriousTownTalk} serious or planning conversations happened today.`,
+        "There is no formal leader or agency for town problems yet.",
+      ],
+    });
+  }
 }
 
 function transactionKey(category: TransactionCategory, buildingId = "town") {
@@ -1425,6 +1587,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
       updateHouseholdFinanceStatus(sim, household, members);
       for (const citizen of members) brainUpdateEmotionAndProblems(sim, citizen);
     }
+    detectCivicIssues(sim);
     addFeed(sim, `A new day begins with ${sim.weather.kind} weather around ${sim.weather.temperature}F.`);
   }
 
@@ -1434,6 +1597,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
 
   if (Math.floor(previousMinute / 120) !== Math.floor(sim.minute / 120)) {
     for (const citizen of sim.citizens) brainRefreshPersonalGoals(sim, citizen, addLifeJournal);
+    detectCivicIssues(sim);
   }
 
   const tick = sim.day * 1440 + sim.minute;
@@ -1468,6 +1632,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
   const citizenCash = sim.citizens.reduce((sum, citizen) => sum + citizen.cash, 0);
   const businessRevenue = ["market", "clinic"].reduce((sum, id) => sum + (sim.businessAccounts[id] ?? 0), 0);
   const majorDecisions = sim.worldDecisions.filter((decision) => decision.impact === "high" || decision.impact === "medium").length;
+  const activeIssues = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
   return {
     day: sim.day,
     time: formatTime(sim.minute),
@@ -1479,5 +1644,6 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     townCash: Math.round(householdCash + citizenCash),
     businessRevenue: Math.round(businessRevenue),
     majorDecisions,
+    activeIssues,
   };
 }
