@@ -85,6 +85,32 @@ export type WeatherState = {
 
 export type TransactionCategory = "wage" | "market" | "clinic" | "rent" | "living";
 
+export type WorldDecisionCategory = "personal" | "social" | "economy" | "authority" | "civic";
+
+export type WorldDecisionStatus = "automatic" | "pending" | "approved" | "rejected" | "modified";
+
+export type WorldDecisionImpact = "low" | "medium" | "high";
+
+export type WorldDecision = {
+  id: string;
+  day: number;
+  time: string;
+  category: WorldDecisionCategory;
+  status: WorldDecisionStatus;
+  impact: WorldDecisionImpact;
+  title: string;
+  summary: string;
+  actorId?: string;
+  actorName?: string;
+  householdId?: string;
+  householdName?: string;
+  relatedCitizenIds: string[];
+  relatedBuildingId?: string;
+  requiresApproval: boolean;
+  reason: string;
+  effect: string;
+};
+
 export type EconomyTransaction = {
   id: string;
   day: number;
@@ -316,6 +342,7 @@ export type SimulationState = {
   factoryClosed: boolean;
   weather: WeatherState;
   totalConversations: number;
+  worldDecisions: WorldDecision[];
   transactionLog: EconomyTransaction[];
   businessAccounts: Record<string, number>;
   conversationLog: ConversationEntry[];
@@ -334,4 +361,5 @@ export type SimulationSnapshot = {
   totalConversations: number;
   townCash: number;
   businessRevenue: number;
+  majorDecisions: number;
 };

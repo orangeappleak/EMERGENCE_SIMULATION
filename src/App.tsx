@@ -7,6 +7,7 @@ import { MetricsBar } from "./components/MetricsBar";
 import { PeopleBrowser } from "./components/PeopleBrowser";
 import { PixiWorld } from "./components/PixiWorld";
 import { TransactionsBrowser } from "./components/TransactionsBrowser";
+import { WorldDecisionsBrowser } from "./components/WorldDecisionsBrowser";
 import { useSimulation } from "./state/useSimulation";
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [conversationsOpen, setConversationsOpen] = useState(false);
   const [transactionsOpen, setTransactionsOpen] = useState(false);
+  const [worldDecisionsOpen, setWorldDecisionsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
@@ -57,6 +59,7 @@ export default function App() {
               setPeopleOpen(false);
               setConversationsOpen(false);
               setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -69,6 +72,7 @@ export default function App() {
               setControlsOpen(false);
               setConversationsOpen(false);
               setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -81,6 +85,7 @@ export default function App() {
               setControlsOpen(false);
               setPeopleOpen(false);
               setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -93,10 +98,24 @@ export default function App() {
               setControlsOpen(false);
               setPeopleOpen(false);
               setConversationsOpen(false);
+              setWorldDecisionsOpen(false);
               setSelectedBuildingId(null);
             }}
           >
             {transactionsOpen ? "Hide Transactions" : "Transactions"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWorldDecisionsOpen((open) => !open);
+              setControlsOpen(false);
+              setPeopleOpen(false);
+              setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setSelectedBuildingId(null);
+            }}
+          >
+            {worldDecisionsOpen ? "Hide Decisions" : "Decisions"}
           </button>
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
@@ -157,6 +176,19 @@ export default function App() {
           </div>
         ) : null}
 
+        {worldDecisionsOpen ? (
+          <div className="drawer drawer-center">
+            <WorldDecisionsBrowser
+              sim={simulation.sim}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
+              onClose={() => setWorldDecisionsOpen(false)}
+            />
+          </div>
+        ) : null}
+
         <PixiWorld
           sim={simulation.sim}
           selectedCitizenId={simulation.selectedCitizenId}
@@ -171,6 +203,7 @@ export default function App() {
             setPeopleOpen(false);
             setConversationsOpen(false);
             setTransactionsOpen(false);
+            setWorldDecisionsOpen(false);
           }}
         />
 
