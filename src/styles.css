@@ -189,7 +189,7 @@ h3 {
 
 .drawer-center {
   left: 50%;
-  max-width: min(720px, calc(100vw - 48px));
+  max-width: min(1240px, calc(100vw - 48px));
   transform: translateX(-50%);
 }
 
@@ -204,7 +204,7 @@ h3 {
 }
 
 .drawer-center .panel {
-  width: min(720px, calc(100vw - 48px));
+  width: min(1240px, calc(100vw - 48px));
 }
 
 .interior-drawer {
@@ -224,7 +224,7 @@ h3 {
 
 .has-profile .drawer-center .panel {
   margin: 0 auto;
-  width: min(720px, 100%);
+  width: min(1080px, 100%);
 }
 
 .has-profile .interior-drawer {
@@ -521,6 +521,176 @@ h3 {
 
 .transactions-panel {
   gap: 12px;
+}
+
+.workspace-layout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 0.72fr) minmax(420px, 1.28fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-list {
+  max-height: min(54vh, 620px);
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.workspace-list li {
+  padding: 0;
+}
+
+.workspace-list-button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
+  min-height: 0;
+  padding: 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.workspace-list-button:hover,
+.workspace-list-button.active {
+  background: #eef4fb;
+  box-shadow: inset 4px 0 0 var(--blue);
+}
+
+.workspace-detail {
+  background: #fff;
+  border: 1px solid #e0e5e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  max-height: min(54vh, 620px);
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.detail-heading {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.detail-heading span,
+.detail-heading em {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.detail-heading h3 {
+  font-size: 24px;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+
+.detail-heading em {
+  background: #f6f7f7;
+  border: 1px solid #e0e4e7;
+  border-radius: 999px;
+  color: #31383f;
+  flex: 0 0 auto;
+  font-style: normal;
+  padding: 7px 10px;
+}
+
+.detail-heading button {
+  background: #eef4fb;
+  border-color: #d5e1ed;
+  color: var(--blue);
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.detail-summary {
+  color: #31383f;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-card,
+.context-card {
+  background: #f6f7f7;
+  border: 1px solid #e3e7ea;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 11px;
+}
+
+.detail-card span,
+.context-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.detail-card strong,
+.context-card strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.detail-card p,
+.context-card p,
+.context-card small {
+  color: #4c5660;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.context-section {
+  display: grid;
+  gap: 8px;
+}
+
+.context-section h4 {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1;
+  margin: 4px 0 0;
+}
+
+.empty-row {
+  background: #f6f7f7;
+  border: 1px solid #e5e8ea;
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+}
+
+.empty-note {
+  background: #f6f7f7;
+  border: 1px solid #e4e8eb;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+  padding: 10px;
 }
 
 .classification-reason {
@@ -1143,6 +1313,22 @@ h3 {
 .issue-meter-grid strong {
   color: var(--ink);
   font-size: 12px;
+}
+
+.mini-meter-row {
+  display: grid;
+  gap: 5px;
+}
+
+.mini-meter-row span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.mini-meter-row meter {
+  height: 8px;
+  width: 100%;
 }
 
 .issue-evidence-list {
@@ -1777,13 +1963,13 @@ h3 {
 
   .has-profile .drawer-center {
     left: 50%;
-    max-width: min(720px, calc(100vw - 48px));
+    max-width: min(1040px, calc(100vw - 48px));
     right: auto;
     transform: translateX(-50%);
   }
 
   .has-profile .drawer-center .panel {
-    width: min(720px, calc(100vw - 48px));
+    width: min(1040px, calc(100vw - 48px));
   }
 
   .has-profile .interior-drawer {
@@ -1806,6 +1992,15 @@ h3 {
   .map-stage {
     height: clamp(620px, calc(100vh - 176px), 820px);
     min-height: 620px;
+  }
+
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-list,
+  .workspace-detail {
+    max-height: none;
   }
 }
 

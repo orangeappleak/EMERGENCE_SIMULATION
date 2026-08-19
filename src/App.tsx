@@ -192,6 +192,10 @@ export default function App() {
           <div className="drawer drawer-center">
             <TransactionsBrowser
               sim={simulation.sim}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
               onClose={() => setTransactionsOpen(false)}
             />
           </div>

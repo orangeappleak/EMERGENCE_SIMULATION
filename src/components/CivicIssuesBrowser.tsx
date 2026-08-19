@@ -28,6 +28,7 @@ export function CivicIssuesBrowser({ sim, onSelectCitizen, onClose }: CivicIssue
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | CivicIssueKind>("all");
   const [status, setStatus] = useState<"all" | CivicIssueStatus>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
 
   const issues = useMemo(() => {
@@ -39,6 +40,25 @@ export function CivicIssuesBrowser({ sim, onSelectCitizen, onClose }: CivicIssue
   }, [kind, normalizedQuery, sim.civicIssues, status]);
 
   const urgentCount = sim.civicIssues.filter((issue) => issue.status === "urgent").length;
+  const selectedIssue = issues.find((issue) => issue.id === selectedId) ?? issues[0];
+  const issueDecisions = selectedIssue
+    ? sim.worldDecisions
+        .filter((decision) => decision.category === "civic" || decision.category === "economy" || decision.summary.toLowerCase().includes(selectedIssue.kind))
+        .filter((decision) => {
+          const sameCitizen = selectedIssue.affectedCitizenIds.some((citizenId) => decision.relatedCitizenIds.includes(citizenId) || decision.actorId === citizenId);
+          return sameCitizen || decision.reason.toLowerCase().includes(selectedIssue.kind) || decision.effect.toLowerCase().includes(selectedIssue.kind);
+        })
+        .slice(0, 5)
+    : [];
+  const issueConversations = selectedIssue
+    ? sim.conversationLog
+        .filter((entry) => {
+          const sameCitizen = selectedIssue.affectedCitizenIds.some((citizenId) => entry.speakerId === citizenId || entry.withId === citizenId);
+          const text = [entry.topic, entry.text, entry.classificationReason].join(" ").toLowerCase();
+          return sameCitizen && (text.includes(selectedIssue.kind) || text.includes("money") || text.includes("clinic") || entry.classification === "serious" || entry.classification === "planning");
+        })
+        .slice(0, 6)
+    : [];
 
   return (
     <aside className="panel civic-issues-panel">
@@ -82,61 +102,117 @@ export function CivicIssuesBrowser({ sim, onSelectCitizen, onClose }: CivicIssue
         ))}
       </select>
 
-      <ol className="civic-issue-list">
-        {issues.length ? issues.map((issue) => (
-          <li key={issue.id} className={`issue-status-${issue.status}`}>
-            <div className="issue-entry-head">
-              <div>
-                <strong>{issue.title}</strong>
-                <span>{label(issue.kind)} · first seen day {issue.firstSeenDay} · updated day {issue.lastUpdatedDay} {issue.lastUpdatedTime}</span>
+      <div className="workspace-layout">
+        <ol className="civic-issue-list workspace-list">
+          {issues.length ? issues.map((issue) => (
+            <li key={issue.id} className={`issue-status-${issue.status}`}>
+              <button
+                className={selectedIssue?.id === issue.id ? "workspace-list-button active" : "workspace-list-button"}
+                type="button"
+                onClick={() => setSelectedId(issue.id)}
+              >
+                <div className="issue-entry-head">
+                  <div>
+                    <strong>{issue.title}</strong>
+                    <span>{label(issue.kind)} · updated day {issue.lastUpdatedDay} {issue.lastUpdatedTime}</span>
+                  </div>
+                  <em>{label(issue.status)}</em>
+                </div>
+                <div className="mini-meter-row">
+                  <span>Severity {Math.round(issue.severity)}%</span>
+                  <meter min="0" max="100" value={issue.severity} />
+                </div>
+              </button>
+            </li>
+          )) : (
+            <li className="empty-row">
+              <div className="issue-entry-head">
+                <div>
+                  <strong>No civic issues yet</strong>
+                  <span>The town has not recognized a repeated problem matching this view.</span>
+                </div>
+                <em>Watching</em>
               </div>
-              <em>{label(issue.status)}</em>
-            </div>
+            </li>
+          )}
+        </ol>
 
-            <div className="issue-meter-grid">
-              <label>
-                Severity
-                <meter min="0" max="100" value={issue.severity} />
-                <strong>{Math.round(issue.severity)}%</strong>
-              </label>
-              <label>
-                Awareness
-                <meter min="0" max="100" value={issue.awareness} />
-                <strong>{Math.round(issue.awareness)}%</strong>
-              </label>
-            </div>
-
-            <ul className="issue-evidence-list">
-              {issue.evidence.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-
-            {issue.affectedCitizenIds.length ? (
-              <div className="decision-people-row">
-                {issue.affectedCitizenIds.slice(0, 7).map((citizenId) => {
-                  const citizen = sim.citizens.find((item) => item.id === citizenId);
-                  return citizen ? (
-                    <button key={citizenId} type="button" onClick={() => onSelectCitizen(citizenId)}>
-                      {citizen.name}
-                    </button>
-                  ) : null;
-                })}
+        <section className="workspace-detail" aria-label="Civic issue details">
+          {selectedIssue ? (
+            <>
+              <div className="detail-heading">
+                <div>
+                  <span>{label(selectedIssue.kind)} · first seen day {selectedIssue.firstSeenDay}</span>
+                  <h3>{selectedIssue.title}</h3>
+                </div>
+                <em>{label(selectedIssue.status)}</em>
               </div>
-            ) : null}
-          </li>
-        )) : (
-          <li>
-            <div className="issue-entry-head">
-              <div>
-                <strong>No civic issues yet</strong>
-                <span>The town has not recognized a repeated problem matching this view.</span>
+
+              <div className="issue-meter-grid">
+                <label>
+                  Severity
+                  <meter min="0" max="100" value={selectedIssue.severity} />
+                  <strong>{Math.round(selectedIssue.severity)}%</strong>
+                </label>
+                <label>
+                  Awareness
+                  <meter min="0" max="100" value={selectedIssue.awareness} />
+                  <strong>{Math.round(selectedIssue.awareness)}%</strong>
+                </label>
               </div>
-              <em>Watching</em>
-            </div>
-          </li>
-        )}
-      </ol>
+
+              <div className="context-section">
+                <h4>Evidence</h4>
+                <ul className="issue-evidence-list">
+                  {selectedIssue.evidence.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {selectedIssue.affectedCitizenIds.length ? (
+                <div className="context-section">
+                  <h4>Affected People</h4>
+                  <div className="decision-people-row">
+                    {selectedIssue.affectedCitizenIds.slice(0, 12).map((citizenId) => {
+                      const citizen = sim.citizens.find((item) => item.id === citizenId);
+                      return citizen ? (
+                        <button key={citizenId} type="button" onClick={() => onSelectCitizen(citizenId)}>
+                          {citizen.name}
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="context-section">
+                <h4>Related Decisions</h4>
+                {issueDecisions.length ? issueDecisions.map((decision) => (
+                  <div className="context-card" key={decision.id}>
+                    <span>{decision.time} · {label(decision.category)} · {label(decision.status)}</span>
+                    <strong>{decision.title}</strong>
+                    <p>{decision.summary}</p>
+                  </div>
+                )) : <p className="empty-note">No decisions have clearly attached themselves to this issue yet.</p>}
+              </div>
+
+              <div className="context-section">
+                <h4>Related Conversations</h4>
+                {issueConversations.length ? issueConversations.map((entry) => (
+                  <div className="context-card" key={entry.id}>
+                    <span>{entry.time} · {label(entry.classification)} · {entry.topic}</span>
+                    <strong>{entry.speakerName ?? "Someone"} with {entry.withName}</strong>
+                    <p>{entry.text}</p>
+                  </div>
+                )) : <p className="empty-note">No citizen conversations are tied strongly to this issue yet.</p>}
+              </div>
+            </>
+          ) : (
+            <p className="empty-note">Choose an issue to inspect what the town has noticed.</p>
+          )}
+        </section>
+      </div>
     </aside>
   );
 }

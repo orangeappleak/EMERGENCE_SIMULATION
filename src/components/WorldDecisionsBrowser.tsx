@@ -35,6 +35,7 @@ export function WorldDecisionsBrowser({ sim, onSelectCitizen, onClose }: WorldDe
   const [category, setCategory] = useState<"all" | WorldDecisionCategory>("all");
   const [status, setStatus] = useState<"all" | WorldDecisionStatus>("all");
   const [impact, setImpact] = useState<"all" | WorldDecisionImpact>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
 
   const decisions = useMemo(() => {
@@ -46,6 +47,34 @@ export function WorldDecisionsBrowser({ sim, onSelectCitizen, onClose }: WorldDe
   }, [category, impact, normalizedQuery, sim.worldDecisions, status]);
 
   const pendingCount = sim.worldDecisions.filter((entry) => entry.status === "pending").length;
+  const selectedDecision = decisions.find((entry) => entry.id === selectedId) ?? decisions[0];
+  const decisionMinute = selectedDecision ? timeToMinutes(selectedDecision.time) : 0;
+  const relatedConversations = selectedDecision
+    ? sim.conversationLog
+        .filter((entry) => entry.day === selectedDecision.day)
+        .filter((entry) => {
+          const entryMinute = timeToMinutes(entry.time);
+          const beforeDecision = entryMinute <= decisionMinute;
+          const closeInTime = decisionMinute - entryMinute <= 360;
+          const sameCitizen = selectedDecision.relatedCitizenIds.some((citizenId) => entry.speakerId === citizenId || entry.withId === citizenId);
+          const sameLocation = selectedDecision.relatedBuildingId && entry.locationId === selectedDecision.relatedBuildingId;
+          const topicMatch = [entry.topic, entry.text, entry.classification].join(" ").toLowerCase().includes(selectedDecision.category);
+          return beforeDecision && closeInTime && (sameCitizen || sameLocation || topicMatch || entry.classification === "planning" || entry.classification === "serious");
+        })
+        .slice(0, 7)
+    : [];
+  const relatedTransactions = selectedDecision
+    ? sim.transactionLog
+        .filter((entry) => entry.day === selectedDecision.day)
+        .filter((entry) => {
+          const closeInTime = Math.abs(timeToMinutes(entry.time) - decisionMinute) <= 240;
+          const sameCitizen = entry.citizenId ? selectedDecision.relatedCitizenIds.includes(entry.citizenId) || selectedDecision.actorId === entry.citizenId : false;
+          const sameHousehold = entry.householdId && entry.householdId === selectedDecision.householdId;
+          const sameBuilding = entry.buildingId && entry.buildingId === selectedDecision.relatedBuildingId;
+          return closeInTime && (sameCitizen || sameHousehold || sameBuilding);
+        })
+        .slice(0, 5)
+    : [];
 
   return (
     <aside className="panel world-decisions-panel">
@@ -96,53 +125,111 @@ export function WorldDecisionsBrowser({ sim, onSelectCitizen, onClose }: WorldDe
         </select>
       </div>
 
-      <ol className="world-decision-list">
-        {decisions.length ? decisions.map((entry) => (
-          <li key={entry.id} className={`decision-impact-${entry.impact}`}>
-            <div className="decision-entry-head">
-              <div>
-                <strong>{entry.title}</strong>
-                <span>Day {entry.day} {entry.time} · {label(entry.category)}</span>
+      <div className="workspace-layout">
+        <ol className="world-decision-list workspace-list">
+          {decisions.length ? decisions.map((entry) => (
+            <li key={entry.id} className={`decision-impact-${entry.impact}`}>
+              <button
+                className={selectedDecision?.id === entry.id ? "workspace-list-button active" : "workspace-list-button"}
+                type="button"
+                onClick={() => setSelectedId(entry.id)}
+              >
+                <div className="decision-entry-head">
+                  <div>
+                    <strong>{entry.title}</strong>
+                    <span>Day {entry.day} {entry.time} · {label(entry.category)}</span>
+                  </div>
+                  <em>{label(entry.status)}</em>
+                </div>
+                <p>{entry.summary}</p>
+              </button>
+            </li>
+          )) : (
+            <li className="empty-row">
+              <div className="decision-entry-head">
+                <div>
+                  <strong>No matching decisions</strong>
+                  <span>Try changing the filters</span>
+                </div>
+                <em>Empty</em>
               </div>
-              <em>{label(entry.status)}</em>
-            </div>
-            <p>{entry.summary}</p>
-            <div className="decision-entry-grid">
-              <div>
-                <span>Reason</span>
-                <strong>{entry.reason}</strong>
+              <p>The town has not recorded an event matching this view yet.</p>
+            </li>
+          )}
+        </ol>
+
+        <section className="workspace-detail" aria-label="Decision details">
+          {selectedDecision ? (
+            <>
+              <div className="detail-heading">
+                <div>
+                  <span>Day {selectedDecision.day} {selectedDecision.time} · {label(selectedDecision.category)} · {label(selectedDecision.impact)} impact</span>
+                  <h3>{selectedDecision.title}</h3>
+                </div>
+                <em>{label(selectedDecision.status)}</em>
               </div>
-              <div>
-                <span>Effect</span>
-                <strong>{entry.effect}</strong>
+              <p className="detail-summary">{selectedDecision.summary}</p>
+
+              <div className="decision-entry-grid">
+                <div>
+                  <span>Reason</span>
+                  <strong>{selectedDecision.reason}</strong>
+                </div>
+                <div>
+                  <span>Effect</span>
+                  <strong>{selectedDecision.effect}</strong>
+                </div>
               </div>
-            </div>
-            {entry.relatedCitizenIds.length ? (
-              <div className="decision-people-row">
-                {entry.relatedCitizenIds.slice(0, 5).map((citizenId) => {
-                  const citizen = sim.citizens.find((item) => item.id === citizenId);
-                  return citizen ? (
-                    <button key={citizenId} type="button" onClick={() => onSelectCitizen(citizenId)}>
-                      {citizen.name}
-                    </button>
-                  ) : null;
-                })}
+
+              {selectedDecision.relatedCitizenIds.length ? (
+                <div className="context-section">
+                  <h4>People Involved</h4>
+                  <div className="decision-people-row">
+                    {selectedDecision.relatedCitizenIds.map((citizenId) => {
+                      const citizen = sim.citizens.find((item) => item.id === citizenId);
+                      return citizen ? (
+                        <button key={citizenId} type="button" onClick={() => onSelectCitizen(citizenId)}>
+                          {citizen.name}
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="context-section">
+                <h4>Conversations That Fed Into It</h4>
+                {relatedConversations.length ? relatedConversations.map((entry) => (
+                  <div className="context-card" key={entry.id}>
+                    <span>{entry.time} · {label(entry.classification)} · {entry.topic}</span>
+                    <strong>{entry.speakerName ?? "Someone"} with {entry.withName}</strong>
+                    <p>{entry.text}</p>
+                    <small>{entry.classificationReason}</small>
+                  </div>
+                )) : <p className="empty-note">No earlier conversations clearly connect to this decision yet.</p>}
               </div>
-            ) : null}
-          </li>
-        )) : (
-          <li>
-            <div className="decision-entry-head">
-              <div>
-                <strong>No matching decisions</strong>
-                <span>Try changing the filters</span>
+
+              <div className="context-section">
+                <h4>Money Around This Decision</h4>
+                {relatedTransactions.length ? relatedTransactions.map((entry) => (
+                  <div className="context-card" key={entry.id}>
+                    <span>{entry.time} · {label(entry.category)}</span>
+                    <strong>${Math.round(entry.amount).toLocaleString()} · {entry.fromName} {"->"} {entry.toName}</strong>
+                    <p>{entry.note}</p>
+                  </div>
+                )) : <p className="empty-note">No nearby transactions were connected to this decision.</p>}
               </div>
-              <em>Empty</em>
-            </div>
-            <p>The town has not recorded an event matching this view yet.</p>
-          </li>
-        )}
-      </ol>
+            </>
+          ) : (
+            <p className="empty-note">Choose a decision to inspect the story around it.</p>
+          )}
+        </section>
+      </div>
     </aside>
   );
+}
+
+function timeToMinutes(time: string) {
+  const [hours = "0", minutes = "0"] = time.split(":");
+  return Number(hours) * 60 + Number(minutes);
 }
