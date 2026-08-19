@@ -12,6 +12,8 @@ const MAX_ZOOM = 2.25;
 type CitizenSprite = {
   root: PIXI.Container;
   sprite: PIXI.Sprite;
+  frames: PIXI.Texture[];
+  facingX: 1 | -1;
   marker: PIXI.Sprite;
   talkBubble: PIXI.Container;
   selection: PIXI.Graphics;
@@ -367,14 +369,14 @@ function fitRendererToHost(app: PIXI.Application, host: HTMLElement, viewport: P
   return () => observer.disconnect();
 }
 
-function firstNpcFrame(texture: PIXI.Texture, index: number) {
+function npcFrames(texture: PIXI.Texture, index: number) {
   const frameWidth = 32;
   const frameHeight = 32;
   const row = index % 5;
-  return new PIXI.Texture({
+  return Array.from({ length: 4 }, (_, frameIndex) => new PIXI.Texture({
     source: texture.source,
-    frame: new PIXI.Rectangle(0, row * frameHeight, frameWidth, frameHeight),
-  });
+    frame: new PIXI.Rectangle(frameIndex * frameWidth, row * frameHeight, frameWidth, frameHeight),
+  }));
 }
 
 function makeTalkBubble() {
@@ -397,7 +399,8 @@ function makeCitizenSprite(citizen: Citizen, textures: Record<string, PIXI.Textu
   });
 
   const sheet = GAME_ASSETS.npcs[Number(citizen.id.split("_")[1]) % GAME_ASSETS.npcs.length];
-  const sprite = new PIXI.Sprite(firstNpcFrame(textures[sheet], Number(citizen.id.split("_")[1])));
+  const frames = npcFrames(textures[sheet], Number(citizen.id.split("_")[1]));
+  const sprite = new PIXI.Sprite(frames[0]);
   sprite.anchor.set(0.5, 0.82);
   sprite.scale.set(1.6);
 
@@ -409,7 +412,7 @@ function makeCitizenSprite(citizen: Citizen, textures: Record<string, PIXI.Textu
 
   const talkBubble = makeTalkBubble();
   root.addChild(selection, sprite, marker, talkBubble);
-  return { root, sprite, marker, talkBubble, selection };
+  return { root, sprite, frames, facingX: 1, marker, talkBubble, selection };
 }
 
 function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: boolean) {
@@ -424,7 +427,26 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   }
 
   const dx = citizen.targetX - citizen.x;
-  if (Math.abs(dx) > 2) view.sprite.scale.x = dx < 0 ? -1.6 : 1.6;
+  const dy = citizen.targetY - citizen.y;
+  const distanceToTarget = Math.hypot(dx, dy);
+  const walking = distanceToTarget > 5 && citizen.currentIntention !== "sleep";
+  const citizenIndex = Number(citizen.id.split("_")[1]);
+  const now = performance.now();
+
+  if (Math.abs(dx) > 2) view.facingX = dx < 0 ? -1 : 1;
+
+  const walkFrame = walking ? 1 + Math.floor((now / 130 + citizenIndex) % 3) : 0;
+  view.sprite.texture = view.frames[walkFrame];
+  view.sprite.scale.x = view.facingX * 1.6;
+  view.sprite.scale.y = 1.6;
+  view.sprite.y = walking
+    ? Math.sin(now / 75 + citizenIndex) * 1.4
+    : Math.sin(now / 820 + citizenIndex) * 0.45;
+  view.sprite.rotation = walking && Math.abs(dx) > Math.abs(dy) * 0.35
+    ? view.facingX * Math.sin(now / 150 + citizenIndex) * 0.035
+    : 0;
+  view.talkBubble.y = view.talkBubble.visible ? Math.sin(now / 180 + citizenIndex) * 1.2 : 0;
+  view.marker.y = walking ? Math.sin(now / 140 + citizenIndex) * 0.8 : 0;
 }
 
 export async function createPixiWorld(
