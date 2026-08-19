@@ -83,6 +83,24 @@ export type WeatherState = {
   temperature: number;
 };
 
+export type TransactionCategory = "wage" | "market" | "clinic" | "rent" | "living";
+
+export type EconomyTransaction = {
+  id: string;
+  day: number;
+  time: string;
+  category: TransactionCategory;
+  amount: number;
+  fromId: string;
+  fromName: string;
+  toId: string;
+  toName: string;
+  citizenId?: string;
+  householdId?: string;
+  buildingId?: string;
+  note: string;
+};
+
 export type DecisionScore = {
   intention: CitizenIntention;
   destinationId: string;
@@ -148,6 +166,7 @@ export type DailyActivity = {
   conversations: number;
   goalProgress: number;
   earned: number;
+  spent: number;
 };
 
 export type LifeJournalEntry = {
@@ -198,6 +217,9 @@ export type Household = {
   sharedCash: number;
   foodStock: number;
   stress: number;
+  unpaidBills: number;
+  financialStatus: "stable" | "strained" | "critical";
+  lastMoneyNote: string;
 };
 
 export type Citizen = {
@@ -250,6 +272,7 @@ export type Citizen = {
     fun: number;
     rest: number;
   };
+  lastTransactionAt: Record<string, number>;
   knownFacts: string[];
   memories: string[];
   relationships: Record<string, Relationship>;
@@ -293,6 +316,8 @@ export type SimulationState = {
   factoryClosed: boolean;
   weather: WeatherState;
   totalConversations: number;
+  transactionLog: EconomyTransaction[];
+  businessAccounts: Record<string, number>;
   conversationLog: ConversationEntry[];
   households: Household[];
   citizens: Citizen[];
@@ -307,4 +332,6 @@ export type SimulationSnapshot = {
   averageMood: number;
   rumorReach: number;
   totalConversations: number;
+  townCash: number;
+  businessRevenue: number;
 };

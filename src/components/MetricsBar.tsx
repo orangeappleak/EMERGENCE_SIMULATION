@@ -27,6 +27,10 @@ export function MetricsBar({ summary }: MetricsBarProps) {
         <span>Weather</span>
         <strong>{summary.weather.kind} · {summary.weather.temperature}F</strong>
       </div>
+      <div>
+        <span>Town Cash</span>
+        <strong>${summary.townCash.toLocaleString()}</strong>
+      </div>
     </section>
   );
 }

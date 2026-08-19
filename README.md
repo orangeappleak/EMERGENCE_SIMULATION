@@ -35,6 +35,8 @@ http://localhost:5173
 - relationships with familiarity, friendship, trust, and dislike
 - stronger family and household relationships
 - household rent, shared cash, food stock, and stress
+- first-pass economy with wages, market purchases, clinic payments, rent, daily living costs, and transaction logs
+- searchable transaction ledger with category filters and per-citizen money history
 - children and some teens attend school
 - social conversations
 - conversation browser with topic/classification filters
@@ -65,6 +67,7 @@ src/
     MetricsBar.tsx
     PeopleBrowser.tsx
     PixiWorld.tsx
+    TransactionsBrowser.tsx
   rendering/
     assets.ts
     pixiWorld.ts

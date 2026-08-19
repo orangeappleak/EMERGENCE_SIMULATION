@@ -45,6 +45,7 @@ function titleCase(text: string) {
 }
 
 export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: CitizenProfileProps) {
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const workplace = citizen.workplaceId ? buildingById(citizen.workplaceId) : null;
   const currentSlot = placeSlotById(citizen.currentSlotId);
@@ -65,6 +66,9 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
       return bScore - aScore;
     })
     .slice(0, 5);
+  const recentTransactions = sim.transactionLog
+    .filter((entry) => entry.citizenId === citizen.id || entry.householdId === citizen.householdId)
+  const visibleTransactions = showAllTransactions ? recentTransactions : recentTransactions.slice(0, 8);
 
   return (
     <aside className="panel profile-panel">
@@ -311,10 +315,11 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
 
       {household ? (
         <div className="routine-line">
-          <span>{household.name}</span>
+          <span>{household.name} · {household.financialStatus}</span>
           <strong>
-            {householdMembers?.length ?? 0} members · ${Math.round(household.sharedCash).toLocaleString()} shared · {household.foodStock}% food · {Math.round(household.stress)}% stress
+            {householdMembers?.length ?? 0} members · ${Math.round(household.sharedCash).toLocaleString()} shared · ${Math.round(household.unpaidBills).toLocaleString()} unpaid · {household.foodStock}% food · {Math.round(household.stress)}% stress
           </strong>
+          <em>{household.lastMoneyNote}</em>
         </div>
       ) : null}
 
@@ -345,8 +350,36 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
             <strong>{citizen.today.conversations}</strong>
             <small>talks</small>
           </div>
+          <div>
+            <strong>${Math.round(citizen.today.spent)}</strong>
+            <small>spent</small>
+          </div>
         </div>
       </div>
+
+      <CollapsibleSection title="Recent Money" count={recentTransactions.length} defaultOpen>
+        {recentTransactions.length ? (
+          <button className="ledger-toggle" type="button" onClick={() => setShowAllTransactions((value) => !value)}>
+            {showAllTransactions ? "Show recent" : "Show all ledger"}
+          </button>
+        ) : null}
+        <ul className="detail-list transaction-list">
+          {(visibleTransactions.length ? visibleTransactions : [{
+            id: "empty",
+            time: formatTime(sim.minute),
+            amount: 0,
+            fromName: "No transactions",
+            toName: "",
+            note: "No money has moved for this person or household yet.",
+          }]).map((entry) => (
+            <li key={entry.id}>
+              <strong>{entry.time} · ${Math.round(entry.amount).toLocaleString()}</strong>
+              <span>{entry.toName ? `${entry.fromName} -> ${entry.toName}` : entry.fromName}</span>
+              <small>{entry.note}</small>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleSection>
 
       {householdMembers?.length ? (
         <CollapsibleSection title="Household" count={householdMembers.length} defaultOpen>
