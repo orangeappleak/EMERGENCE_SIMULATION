@@ -21,6 +21,7 @@ export default function App() {
   const [worldDecisionsOpen, setWorldDecisionsOpen] = useState(false);
   const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showRoutes, setShowRoutes] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -141,6 +142,13 @@ export default function App() {
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
           </button>
+          <button
+            className={showRoutes ? "active" : ""}
+            type="button"
+            onClick={() => setShowRoutes((open) => !open)}
+          >
+            Paths
+          </button>
           {selectedBuildingId ? (
             <button type="button" onClick={() => setSelectedBuildingId(null)}>
               Hide Building
@@ -231,6 +239,7 @@ export default function App() {
           sim={simulation.sim}
           selectedCitizenId={simulation.selectedCitizenId}
           followSelected={profileOpen}
+          showRoutes={showRoutes}
           onSelectCitizen={(citizenId) => {
             simulation.setSelectedCitizenId(citizenId);
             setProfileOpen(true);

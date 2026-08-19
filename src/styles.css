@@ -251,6 +251,12 @@ h3 {
   min-height: 36px;
 }
 
+.map-toolbar button.active {
+  background: #2f6fb0;
+  border-color: #2f6fb0;
+  color: #ffffff;
+}
+
 .panel-title-row {
   align-items: center;
   display: flex;

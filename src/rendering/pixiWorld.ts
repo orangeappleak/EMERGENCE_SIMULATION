@@ -28,10 +28,11 @@ type PixiWorld = {
   app: PIXI.Application;
   viewport: PIXI.Container;
   dynamicLayer: PIXI.Container;
+  routeLayer: PIXI.Container;
   atmosphereLayer: PIXI.Container;
   citizenSprites: Map<string, CitizenSprite>;
   isDraggingCamera: () => boolean;
-  update: (sim: SimulationState, selectedCitizenId: string, followSelected: boolean) => void;
+  update: (sim: SimulationState, selectedCitizenId: string, followSelected: boolean, showRoutes: boolean) => void;
   destroy: () => void;
 };
 
@@ -494,6 +495,28 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   view.lastY = citizen.y;
 }
 
+function drawCitizenRoutes(layer: PIXI.Container, sim: SimulationState, selectedCitizenId: string, showRoutes: boolean) {
+  layer.removeChildren();
+  if (!showRoutes) return;
+
+  const routes = new PIXI.Graphics();
+  for (const citizen of sim.citizens) {
+    if (citizen.route.length === 0) continue;
+    const isSelected = citizen.id === selectedCitizenId;
+    const color = isSelected ? 0xf7d35f : 0x2f6fb0;
+    const alpha = isSelected ? 0.92 : 0.32;
+    routes.moveTo(citizen.x, citizen.y);
+    for (const point of citizen.route) {
+      routes.lineTo(point.x, point.y);
+    }
+    routes.stroke({ color, alpha, width: isSelected ? 3 : 2 });
+    for (const point of citizen.route) {
+      routes.circle(point.x, point.y, isSelected ? 4 : 2.5).fill({ color, alpha: Math.min(1, alpha + 0.15) });
+    }
+  }
+  layer.addChild(routes);
+}
+
 export async function createPixiWorld(
   host: HTMLElement,
   onSelectCitizen: (id: string) => void,
@@ -524,13 +547,16 @@ export async function createPixiWorld(
 
   const viewport = new PIXI.Container();
   const staticLayer = new PIXI.Container();
+  const routeLayer = new PIXI.Container();
   const dynamicLayer = new PIXI.Container();
   const atmosphereLayer = new PIXI.Container();
   atmosphereLayer.eventMode = "none";
   atmosphereLayer.interactiveChildren = false;
+  routeLayer.eventMode = "none";
+  routeLayer.interactiveChildren = false;
   dynamicLayer.sortableChildren = true;
   app.stage.addChild(viewport);
-  viewport.addChild(staticLayer, dynamicLayer);
+  viewport.addChild(staticLayer, routeLayer, dynamicLayer);
   app.stage.addChild(atmosphereLayer);
   drawStaticWorld(staticLayer, textures);
   const cameraControls = attachCameraControls(app, viewport);
@@ -544,10 +570,12 @@ export async function createPixiWorld(
     app,
     viewport,
     dynamicLayer,
+    routeLayer,
     atmosphereLayer,
     citizenSprites,
     isDraggingCamera: cameraControls.isDragging,
-    update(sim, selectedCitizenId, followSelected) {
+    update(sim, selectedCitizenId, followSelected, showRoutes) {
+      drawCitizenRoutes(routeLayer, sim, selectedCitizenId, showRoutes);
       for (const citizen of sim.citizens) {
         let view = citizenSprites.get(citizen.id);
         if (!view) {

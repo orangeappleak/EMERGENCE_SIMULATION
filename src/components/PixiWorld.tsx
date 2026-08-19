@@ -6,11 +6,12 @@ type PixiWorldProps = {
   sim: SimulationState;
   selectedCitizenId: string;
   followSelected: boolean;
+  showRoutes: boolean;
   onSelectCitizen: (citizenId: string) => void;
   onSelectBuilding: (buildingId: string) => void;
 };
 
-export function PixiWorld({ sim, selectedCitizenId, followSelected, onSelectCitizen, onSelectBuilding }: PixiWorldProps) {
+export function PixiWorld({ sim, selectedCitizenId, followSelected, showRoutes, onSelectCitizen, onSelectBuilding }: PixiWorldProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<Awaited<ReturnType<typeof createPixiWorld>> | null>(null);
   const selectRef = useRef(onSelectCitizen);
@@ -36,7 +37,7 @@ export function PixiWorld({ sim, selectedCitizenId, followSelected, onSelectCiti
           return;
         }
         worldRef.current = world;
-        world.update(sim, selectedCitizenId, followSelected);
+        world.update(sim, selectedCitizenId, followSelected, showRoutes);
       } catch (error) {
         if (!cancelled) {
           setBootError(error instanceof Error ? error.message : "Pixi failed to start.");
@@ -53,8 +54,8 @@ export function PixiWorld({ sim, selectedCitizenId, followSelected, onSelectCiti
   }, []);
 
   useEffect(() => {
-    worldRef.current?.update(sim, selectedCitizenId, followSelected);
-  }, [sim, selectedCitizenId, followSelected, sim.day, sim.minute, sim.totalConversations, sim.weather.kind]);
+    worldRef.current?.update(sim, selectedCitizenId, followSelected, showRoutes);
+  }, [sim, selectedCitizenId, followSelected, showRoutes, sim.day, sim.minute, sim.totalConversations, sim.weather.kind]);
 
   return (
     <section ref={hostRef} className="map-stage" aria-label="Northbridge map">

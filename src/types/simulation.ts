@@ -145,6 +145,11 @@ export type EconomyTransaction = {
   note: string;
 };
 
+export type RoutePoint = {
+  x: number;
+  y: number;
+};
+
 export type DecisionScore = {
   intention: CitizenIntention;
   destinationId: string;
@@ -282,6 +287,7 @@ export type Citizen = {
   y: number;
   targetX: number;
   targetY: number;
+  route: RoutePoint[];
   destinationId: string;
   currentSlotId: string;
   destinationSlotId: string;

@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, RoutePoint, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -22,6 +22,27 @@ const FIRST_NAMES = [
 ];
 const LAST_NAMES = ["Chen", "Rivera", "Patel", "Moore", "Kim", "Morgan", "Reed", "Singh", "Brooks", "Vale"];
 const HOME_IDS = BUILDINGS.filter((building) => building.kind === "home").map((building) => building.id);
+const TOWN_ROUTE_SPINE_Y = 322;
+const TOWN_ROUTE_SPINE_X = 456;
+const ROUTE_EPSILON = 6;
+
+const BUILDING_ROUTE_ANCHORS: Record<string, RoutePoint> = {
+  home_01: { x: 202, y: 264 },
+  home_02: { x: 350, y: 264 },
+  home_03: { x: 154, y: 380 },
+  home_04: { x: 323, y: 380 },
+  home_05: { x: 154, y: 620 },
+  home_06: { x: 350, y: 620 },
+  home_07: { x: 1058, y: 264 },
+  home_08: { x: 1243, y: 264 },
+  home_09: { x: 1083, y: 620 },
+  home_10: { x: 1253, y: 620 },
+  factory: { x: 800, y: 264 },
+  market: { x: 565, y: 380 },
+  office: { x: 810, y: 380 },
+  clinic: { x: 966, y: 380 },
+  school: { x: 1145, y: 380 },
+};
 
 function weatherForDay(day: number): WeatherState {
   const rand = mulberry32(51000 + day * 317);
@@ -113,6 +134,54 @@ function chooseDestinationSlot(citizen: Citizen, destinationId: string, intentio
     return slotForKind(destinationId, intention === "work" ? ["exam", "waiting"] : ["waiting", "exam", "entry"]);
   }
   return firstSlot(destinationId);
+}
+
+function routeAnchorFor(buildingId: string) {
+  return BUILDING_ROUTE_ANCHORS[buildingId] ?? centerOf(buildingId);
+}
+
+function addRoutePoint(route: RoutePoint[], point: RoutePoint) {
+  const previous = route[route.length - 1];
+  if (!previous || Math.hypot(previous.x - point.x, previous.y - point.y) > ROUTE_EPSILON) {
+    route.push({ x: Math.round(point.x), y: Math.round(point.y) });
+  }
+}
+
+function routeToSpine(anchor: RoutePoint) {
+  const route: RoutePoint[] = [];
+  addRoutePoint(route, anchor);
+  addRoutePoint(route, { x: anchor.x, y: TOWN_ROUTE_SPINE_Y });
+  addRoutePoint(route, { x: TOWN_ROUTE_SPINE_X, y: TOWN_ROUTE_SPINE_Y });
+  return route;
+}
+
+function routeFromSpine(anchor: RoutePoint) {
+  const route: RoutePoint[] = [];
+  addRoutePoint(route, { x: TOWN_ROUTE_SPINE_X, y: TOWN_ROUTE_SPINE_Y });
+  addRoutePoint(route, { x: anchor.x, y: TOWN_ROUTE_SPINE_Y });
+  addRoutePoint(route, anchor);
+  return route;
+}
+
+function buildRoute(citizen: Citizen, destinationId: string, target: RoutePoint) {
+  const startAnchor = routeAnchorFor(citizen.destinationId);
+  const endAnchor = routeAnchorFor(destinationId);
+  const route: RoutePoint[] = [];
+
+  addRoutePoint(route, { x: citizen.x, y: citizen.y });
+  if (Math.hypot(citizen.x - startAnchor.x, citizen.y - startAnchor.y) > 28) {
+    addRoutePoint(route, startAnchor);
+  }
+
+  if (Math.hypot(startAnchor.x - endAnchor.x, startAnchor.y - endAnchor.y) > 34) {
+    for (const point of routeToSpine(startAnchor)) addRoutePoint(route, point);
+    for (const point of routeFromSpine(endAnchor)) addRoutePoint(route, point);
+  } else {
+    addRoutePoint(route, endAnchor);
+  }
+
+  addRoutePoint(route, target);
+  return route.slice(1);
 }
 
 export function buildingById(id: string): Building {
@@ -231,6 +300,7 @@ function createCitizen(
     y: homeSlot.y + (rand() - 0.5) * homeSlot.radius * 2,
     targetX: homeSlot.x,
     targetY: homeSlot.y,
+    route: [],
     destinationId: household.homeId,
     currentSlotId: homeSlot.id,
     destinationSlotId: homeSlot.id,
@@ -1354,10 +1424,15 @@ function setDestination(citizen: Citizen, destinationId: string, rand: () => num
   if (citizen.destinationId === destinationId && Math.hypot(citizen.targetX - citizen.x, citizen.targetY - citizen.y) > 7) {
     return;
   }
+  const target = {
+    x: slot.x + (rand() - 0.5) * slot.radius * 1.6,
+    y: slot.y + (rand() - 0.5) * slot.radius * 1.6,
+  };
+  citizen.route = buildRoute(citizen, destinationId, target);
   citizen.destinationId = destinationId;
   citizen.destinationSlotId = slot.id;
-  citizen.targetX = slot.x + (rand() - 0.5) * slot.radius * 1.6;
-  citizen.targetY = slot.y + (rand() - 0.5) * slot.radius * 1.6;
+  citizen.targetX = target.x;
+  citizen.targetY = target.y;
 }
 
 function updateSchedule(sim: SimulationState, citizen: Citizen) {
@@ -1395,15 +1470,33 @@ function updateSchedule(sim: SimulationState, citizen: Citizen) {
 }
 
 function moveCitizen(citizen: Citizen, simMinutes: number) {
-  const dx = citizen.targetX - citizen.x;
-  const dy = citizen.targetY - citizen.y;
+  const waypoint = citizen.route[0] ?? { x: citizen.targetX, y: citizen.targetY };
+  const dx = waypoint.x - citizen.x;
+  const dy = waypoint.y - citizen.y;
   const distance = Math.hypot(dx, dy);
-  if (distance < 1) return;
+  if (distance < 1) {
+    if (citizen.route.length > 0) {
+      citizen.route.shift();
+      if (citizen.route.length === 0) {
+        citizen.currentSlotId = citizen.destinationSlotId;
+      }
+    }
+    return;
+  }
   const step = Math.min(distance, simMinutes * WALK_PIXELS_PER_SIM_MINUTE * citizen.routine.walkingSpeed);
   citizen.x += (dx / distance) * step;
   citizen.y += (dy / distance) * step;
   if (distance <= step + 1) {
-    citizen.currentSlotId = citizen.destinationSlotId;
+    citizen.x = waypoint.x;
+    citizen.y = waypoint.y;
+    if (citizen.route.length > 0) {
+      citizen.route.shift();
+      if (citizen.route.length === 0) {
+        citizen.currentSlotId = citizen.destinationSlotId;
+      }
+    } else {
+      citizen.currentSlotId = citizen.destinationSlotId;
+    }
   }
 }
 
