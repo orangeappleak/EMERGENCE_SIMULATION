@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -628,6 +628,16 @@ function upsertCivicIssue(
   });
 }
 
+function hasCivicMaturity(citizen: Citizen) {
+  return citizen.lifeStage === "teen" || citizen.lifeStage === "adult" || citizen.lifeStage === "elder";
+}
+
+function conversationHasCivicMaturity(sim: SimulationState, entry: ConversationEntry) {
+  const speaker = entry.speakerId ? sim.citizens.find((citizen) => citizen.id === entry.speakerId) : null;
+  const listener = sim.citizens.find((citizen) => citizen.id === entry.withId);
+  return Boolean((speaker && hasCivicMaturity(speaker)) || (listener && hasCivicMaturity(listener)));
+}
+
 function detectCivicIssues(sim: SimulationState) {
   const strainedHouseholds = sim.households.filter((household) => household.financialStatus !== "stable");
   const unpaidBills = sim.households.reduce((sum, household) => sum + household.unpaidBills, 0);
@@ -637,7 +647,11 @@ function detectCivicIssues(sim: SimulationState) {
   const unemployed = sim.citizens.filter((citizen) => !citizen.workplaceId && !citizen.schoolClass && citizen.lifeStage !== "child" && citizen.lifeStage !== "elder");
   const lowFoodHouseholds = sim.households.filter((household) => household.foodStock < 35);
   const schoolTrouble = sim.citizens.filter((citizen) => citizen.schoolProgress && (citizen.schoolProgress.attendance < 55 || citizen.schoolProgress.grades < 45));
-  const seriousTownTalk = sim.conversationLog.filter((entry) => entry.day === sim.day && (entry.classification === "serious" || entry.classification === "planning")).length;
+  const seriousTownTalk = sim.conversationLog.filter((entry) => (
+    entry.day === sim.day
+    && (entry.classification === "serious" || entry.classification === "planning")
+    && conversationHasCivicMaturity(sim, entry)
+  )).length;
 
   if (strainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) {
     const affected = strainedHouseholds.flatMap((household) => household.memberIds);
@@ -720,6 +734,7 @@ function detectCivicIssues(sim: SimulationState) {
       severity: clamp(seriousTownTalk * 4 + sim.civicIssues.length * 10, 22, 100),
       awareness: clamp(seriousTownTalk * 5 + sim.civicIssues.length * 8, 10, 100),
       affectedCitizenIds: sim.citizens
+        .filter((citizen) => hasCivicMaturity(citizen))
         .filter((citizen) => citizen.personality.responsibility > 55 || citizen.personality.sociability > 60)
         .map((citizen) => citizen.id),
       evidence: [
@@ -970,6 +985,160 @@ function markTransaction(citizen: Citizen, sim: SimulationState, key: string) {
   citizen.lastTransactionAt[key] = brainTotalMinute(sim);
 }
 
+type ChildCareNeed = {
+  kind: "hungry" | "exhausted" | "lonely" | "sick";
+  destinationId: string;
+  childIntention: CitizenIntention;
+  guardianIntention: CitizenIntention;
+  childThought: string;
+  guardianThought: string;
+};
+
+function childCareNeedFor(child: Citizen): ChildCareNeed | null {
+  if (child.lifeStage !== "child") return null;
+  if (child.mood < 30 && (child.needs.rest > 76 || child.energy < 34)) {
+    return {
+      kind: "sick",
+      destinationId: "clinic",
+      childIntention: "recover",
+      guardianIntention: "errand",
+      childThought: "I do not feel good. I need an adult to help me.",
+      guardianThought: `${child.name} seems unwell. I should help with the clinic.`,
+    };
+  }
+  if (child.needs.hunger > 78) {
+    return {
+      kind: "hungry",
+      destinationId: child.homeId,
+      childIntention: "eat",
+      guardianIntention: "home",
+      childThought: "I am hungry. I need someone at home to help me.",
+      guardianThought: `${child.name} is hungry. I should make sure they get food.`,
+    };
+  }
+  if (child.needs.rest > 88 || child.energy < 24) {
+    return {
+      kind: "exhausted",
+      destinationId: child.homeId,
+      childIntention: "sleep",
+      guardianIntention: "home",
+      childThought: "I am too tired. I want someone familiar nearby.",
+      guardianThought: `${child.name} looks exhausted. I should get them settled.`,
+    };
+  }
+  if (child.needs.belonging > 86 || child.social < 22 || child.mood < 34) {
+    return {
+      kind: "lonely",
+      destinationId: child.homeId,
+      childIntention: "socialize",
+      guardianIntention: "socialize",
+      childThought: "I want to be near someone who knows me.",
+      guardianThought: `${child.name} needs attention. I should check on them.`,
+    };
+  }
+  return null;
+}
+
+function guardianForChild(sim: SimulationState, child: Citizen) {
+  const household = sim.households.find((item) => item.id === child.householdId);
+  if (!household) return null;
+  const members = household.memberIds
+    .map((id) => sim.citizens.find((citizen) => citizen.id === id))
+    .filter((citizen): citizen is Citizen => Boolean(citizen));
+  return members.find((citizen) => citizen.familyRole === "parent" || citizen.familyRole === "partner")
+    ?? members.find((citizen) => citizen.lifeStage === "adult" || citizen.lifeStage === "elder")
+    ?? null;
+}
+
+function resolveChildCare(sim: SimulationState, child: Citizen, guardian: Citizen, need: ChildCareNeed) {
+  if (Math.hypot(child.x - guardian.x, child.y - guardian.y) > 54) return;
+  const key = `care-resolved:${child.id}:${need.kind}`;
+  if (hasRecentTransaction(sim, guardian, key, 130)) return;
+
+  if (need.kind === "hungry") {
+    const household = sim.households.find((item) => item.id === child.householdId);
+    child.needs.hunger = clamp(child.needs.hunger - 46, 0, 100);
+    child.mood = clamp(child.mood + 3.5, 0, 100);
+    guardian.currentThought = `${child.name} has eaten. That helps.`;
+    child.currentThought = `${guardian.name} helped me get food.`;
+    if (household) household.foodStock = clamp(household.foodStock - 3, 0, 100);
+    addLifeJournal(sim, child, `${guardian.name} helped me get food when I was hungry.`);
+    addLifeJournal(sim, guardian, `I helped ${child.name} get food.`);
+  } else if (need.kind === "exhausted") {
+    child.needs.rest = clamp(child.needs.rest - 38, 0, 100);
+    child.energy = clamp(child.energy + 10, 0, 100);
+    child.mood = clamp(child.mood + 2.5, 0, 100);
+    guardian.currentThought = `${child.name} is resting now.`;
+    child.currentThought = `${guardian.name} helped me rest.`;
+    addLifeJournal(sim, child, `${guardian.name} helped me settle down and rest.`);
+    addLifeJournal(sim, guardian, `I helped ${child.name} rest.`);
+  } else if (need.kind === "lonely") {
+    child.needs.belonging = clamp(child.needs.belonging - 48, 0, 100);
+    child.social = clamp(child.social + 24, 0, 100);
+    child.mood = clamp(child.mood + 5, 0, 100);
+    guardian.social = clamp(guardian.social + 4, 0, 100);
+    guardian.currentThought = `${child.name} seems more settled now.`;
+    child.currentThought = `${guardian.name} stayed with me for a bit.`;
+    addLifeJournal(sim, child, `${guardian.name} spent time with me when I felt alone.`);
+    addLifeJournal(sim, guardian, `I checked on ${child.name} when they needed company.`);
+  } else if (need.kind === "sick") {
+    if (child.destinationId !== "clinic" || guardian.destinationId !== "clinic") return;
+    const paid = spendAtBuilding(sim, guardian, "clinic", "clinic", 42, `${guardian.name} paid for ${child.name}'s clinic care.`);
+    const benefit = paid > 0 ? clamp(paid / 42, 0.25, 1) : 0.2;
+    child.needs.rest = clamp(child.needs.rest - 30 * benefit, 0, 100);
+    child.energy = clamp(child.energy + 14 * benefit, 0, 100);
+    child.mood = clamp(child.mood + 4 * benefit, 0, 100);
+    guardian.currentThought = paid > 0 ? `${child.name} got some care at the clinic.` : `I could not really afford care for ${child.name}.`;
+    child.currentThought = paid > 0 ? `${guardian.name} helped me at the clinic.` : "I still do not feel right.";
+    addLifeJournal(sim, child, `${guardian.name} took me for care at the clinic.`);
+    addLifeJournal(sim, guardian, `I took ${child.name} to the clinic.`);
+  }
+
+  markTransaction(guardian, sim, key);
+  markTransaction(child, sim, key);
+}
+
+function updateGuardianCare(sim: SimulationState, child: Citizen) {
+  const need = childCareNeedFor(child);
+  if (!need) return;
+  const guardian = guardianForChild(sim, child);
+  if (!guardian) return;
+  const requestKey = `care-request:${child.id}:${need.kind}`;
+  const rand = mulberry32(sim.day * 16000 + sim.minute * 17 + Number(child.id.split("_")[1]) * 19);
+
+  if (!hasRecentTransaction(sim, guardian, requestKey, 70)) {
+    child.currentIntention = need.childIntention;
+    child.currentThought = need.childThought;
+    child.committedUntil = brainTotalMinute(sim) + 35;
+    setDestination(child, need.destinationId, rand, need.childIntention);
+
+    guardian.currentIntention = need.guardianIntention;
+    guardian.currentThought = need.guardianThought;
+    guardian.committedUntil = brainTotalMinute(sim) + 45;
+    setDestination(guardian, need.destinationId, rand, need.guardianIntention);
+    addWorldDecision(sim, {
+      category: "social",
+      status: "automatic",
+      impact: need.kind === "sick" ? "medium" : "low",
+      title: `${guardian.name} responded to ${child.name}'s ${need.kind} need`,
+      summary: `${child.name} needed help, so ${guardian.name} changed plans to provide care.`,
+      actorId: guardian.id,
+      actorName: guardian.name,
+      householdId: child.householdId,
+      householdName: sim.households.find((household) => household.id === child.householdId)?.name,
+      relatedCitizenIds: [guardian.id, child.id],
+      relatedBuildingId: need.destinationId,
+      requiresApproval: false,
+      reason: "A child had a need they should not solve independently.",
+      effect: "The guardian redirected toward care instead of leaving the child to act like an adult.",
+    });
+    markTransaction(guardian, sim, requestKey);
+    markTransaction(child, sim, requestKey);
+  }
+
+  resolveChildCare(sim, child, guardian, need);
+}
+
 function applyAuthorityConsequences(sim: SimulationState, citizen: Citizen, authority: AuthorityCheck, actualIntention: AuthorityEvent["actualIntention"]) {
   if (!authority.expectedIntention || authority.outcome === "free") return;
 
@@ -1060,6 +1229,13 @@ function maybePayCompletedShift(sim: SimulationState, citizen: Citizen, minute =
 
 function maybeApplyPlaceTransaction(sim: SimulationState, citizen: Citizen) {
   if (!isAtDestination(citizen)) return;
+
+  if (citizen.lifeStage === "child" && (citizen.destinationId === "market" || citizen.destinationId === "clinic")) {
+    citizen.currentThought = citizen.destinationId === "clinic"
+      ? "I need an adult to help me with the clinic."
+      : "I should not be shopping by myself.";
+    return;
+  }
 
   if (citizen.destinationId === "market" && (citizen.currentIntention === "eat" || citizen.currentIntention === "errand")) {
     const key = transactionKey("market", "market");
@@ -1605,6 +1781,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     updateNeeds(citizen, minutesToAdvance);
     applyWeatherEffects(sim, citizen, minutesToAdvance);
     brainUpdateEmotionAndProblems(sim, citizen);
+    if (citizen.lifeStage === "child") updateGuardianCare(sim, citizen);
     updateDailyActivity(citizen, minutesToAdvance);
     maybePayCompletedShift(sim, citizen);
     brainUpdateGoalProgress(sim, citizen, minutesToAdvance, addLifeJournal);

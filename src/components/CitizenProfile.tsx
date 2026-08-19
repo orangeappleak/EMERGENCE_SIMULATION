@@ -44,6 +44,26 @@ function titleCase(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function careNeedFor(citizen: Citizen) {
+  if (citizen.lifeStage !== "child") return null;
+  if (citizen.mood < 30 && (citizen.needs.rest > 76 || citizen.energy < 34)) return "sick";
+  if (citizen.needs.hunger > 78) return "hungry";
+  if (citizen.needs.rest > 88 || citizen.energy < 24) return "exhausted";
+  if (citizen.needs.belonging > 86 || citizen.social < 22 || citizen.mood < 34) return "lonely";
+  return null;
+}
+
+function guardianFor(child: Citizen, householdMembers: Citizen[] | undefined) {
+  if (!householdMembers) return null;
+  return householdMembers.find((member) => member.familyRole === "parent" || member.familyRole === "partner")
+    ?? householdMembers.find((member) => member.lifeStage === "adult" || member.lifeStage === "elder")
+    ?? null;
+}
+
+function distanceBetween(a: Citizen, b: Citizen) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: CitizenProfileProps) {
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const household = sim.households.find((item) => item.id === citizen.householdId);
@@ -69,6 +89,26 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
   const recentTransactions = sim.transactionLog
     .filter((entry) => entry.citizenId === citizen.id || entry.householdId === citizen.householdId)
   const visibleTransactions = showAllTransactions ? recentTransactions : recentTransactions.slice(0, 8);
+  const childCareNeed = careNeedFor(citizen);
+  const childGuardian = guardianFor(citizen, householdMembers);
+  const careDistance = childGuardian ? distanceBetween(citizen, childGuardian) : Infinity;
+  const childCareStatus = citizen.lifeStage === "child"
+    ? childCareNeed
+      ? careDistance < 54
+        ? "being helped"
+        : childGuardian && childGuardian.destinationId === citizen.destinationId
+          ? "guardian coming"
+          : "waiting for help"
+      : "settled"
+    : null;
+  const careDependents = householdMembers
+    ?.filter((member) => member.lifeStage === "child" && member.id !== citizen.id)
+    .map((child) => ({ child, need: careNeedFor(child), guardian: guardianFor(child, householdMembers) }))
+    .filter((item) => item.need && item.guardian?.id === citizen.id) ?? [];
+  const recentCareEvents = sim.worldDecisions
+    .filter((decision) => decision.relatedCitizenIds.includes(citizen.id))
+    .filter((decision) => decision.reason.includes("child") || decision.title.includes("responded to"))
+    .slice(0, 5);
 
   return (
     <aside className="panel profile-panel">
@@ -121,6 +161,43 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
         <span>Thinking</span>
         <strong>{citizen.currentThought}</strong>
       </div>
+
+      {(citizen.lifeStage === "child" || careDependents.length || recentCareEvents.length) ? (
+        <div className="care-card">
+          <div className="care-card-head">
+            <div>
+              <span>Care</span>
+              <strong>{citizen.lifeStage === "child" ? childCareStatus : careDependents.length ? `Helping ${careDependents.length}` : "No active care"}</strong>
+            </div>
+            {citizen.lifeStage === "child" && childGuardian ? (
+              <button type="button" onClick={() => onSelectCitizen(childGuardian.id)}>
+                {childGuardian.name}
+              </button>
+            ) : null}
+          </div>
+
+          {citizen.lifeStage === "child" ? (
+            <p>
+              {childCareNeed
+                ? `${titleCase(childCareNeed)} need · guardian ${childGuardian?.name ?? "not found"}`
+                : `Guardian ${childGuardian?.name ?? "not found"} · no urgent care need`}
+            </p>
+          ) : null}
+
+          {careDependents.length ? (
+            <ul className="care-list">
+              {careDependents.map(({ child, need }) => (
+                <li key={child.id}>
+                  <button type="button" onClick={() => onSelectCitizen(child.id)}>
+                    <span>{child.name}</span>
+                    <strong>{need ? titleCase(need) : "Care"}</strong>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {citizen.decisionReasoning ? (
         <CollapsibleSection title="Decision Reasoning" defaultOpen>
@@ -191,6 +268,33 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
           ))}
         </ul>
       </CollapsibleSection>
+
+      {recentCareEvents.length ? (
+        <CollapsibleSection title="Care Events" count={recentCareEvents.length} defaultOpen={citizen.lifeStage === "child"}>
+          <ul className="detail-list authority-event-list">
+            {recentCareEvents.map((event) => (
+              <li key={event.id}>
+                <strong>{event.title}</strong>
+                <span>Day {event.day} {event.time} · {titleCase(event.impact)} impact</span>
+                <em>{event.summary}</em>
+                <small>{event.effect}</small>
+                {event.relatedCitizenIds.length ? (
+                  <div className="decision-people-row">
+                    {event.relatedCitizenIds.map((citizenId) => {
+                      const related = sim.citizens.find((item) => item.id === citizenId);
+                      return related ? (
+                        <button key={citizenId} type="button" onClick={() => onSelectCitizen(citizenId)}>
+                          {related.name}
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      ) : null}
 
       {citizen.problems.length ? (
         <div className="problem-card">
