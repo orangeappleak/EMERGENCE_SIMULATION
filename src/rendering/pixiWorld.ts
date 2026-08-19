@@ -435,7 +435,7 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
 
   if (walking) {
     if (Math.abs(dx) > Math.abs(dy)) {
-      view.facingFrame = dx < 0 ? 1 : 3;
+      view.facingFrame = dx < 0 ? 3 : 1;
     } else {
       view.facingFrame = dy < 0 ? 2 : 0;
     }
