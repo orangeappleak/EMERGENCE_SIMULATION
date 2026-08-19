@@ -13,7 +13,7 @@ type CitizenSprite = {
   root: PIXI.Container;
   sprite: PIXI.Sprite;
   frames: PIXI.Texture[];
-  facingX: 1 | -1;
+  facingFrame: number;
   marker: PIXI.Sprite;
   talkBubble: PIXI.Container;
   selection: PIXI.Graphics;
@@ -412,7 +412,7 @@ function makeCitizenSprite(citizen: Citizen, textures: Record<string, PIXI.Textu
 
   const talkBubble = makeTalkBubble();
   root.addChild(selection, sprite, marker, talkBubble);
-  return { root, sprite, frames, facingX: 1, marker, talkBubble, selection };
+  return { root, sprite, frames, facingFrame: 0, marker, talkBubble, selection };
 }
 
 function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: boolean) {
@@ -433,18 +433,21 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   const citizenIndex = Number(citizen.id.split("_")[1]);
   const now = performance.now();
 
-  if (Math.abs(dx) > 2) view.facingX = dx < 0 ? -1 : 1;
+  if (walking) {
+    if (Math.abs(dx) > Math.abs(dy)) {
+      view.facingFrame = dx < 0 ? 1 : 3;
+    } else {
+      view.facingFrame = dy < 0 ? 2 : 0;
+    }
+  }
 
-  const walkFrame = walking ? 1 + Math.floor((now / 130 + citizenIndex) % 3) : 0;
-  view.sprite.texture = view.frames[walkFrame];
-  view.sprite.scale.x = view.facingX * 1.6;
+  view.sprite.texture = view.frames[view.facingFrame];
+  view.sprite.scale.x = 1.6;
   view.sprite.scale.y = 1.6;
   view.sprite.y = walking
     ? Math.sin(now / 75 + citizenIndex) * 1.4
     : Math.sin(now / 820 + citizenIndex) * 0.45;
-  view.sprite.rotation = walking && Math.abs(dx) > Math.abs(dy) * 0.35
-    ? view.facingX * Math.sin(now / 150 + citizenIndex) * 0.035
-    : 0;
+  view.sprite.rotation = 0;
   view.talkBubble.y = view.talkBubble.visible ? Math.sin(now / 180 + citizenIndex) * 1.2 : 0;
   view.marker.y = walking ? Math.sin(now / 140 + citizenIndex) * 0.8 : 0;
 }
