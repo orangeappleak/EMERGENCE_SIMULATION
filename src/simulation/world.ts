@@ -1116,6 +1116,22 @@ function updateGuardianCare(sim: SimulationState, child: Citizen) {
     guardian.currentThought = need.guardianThought;
     guardian.committedUntil = brainTotalMinute(sim) + 45;
     setDestination(guardian, need.destinationId, rand, need.guardianIntention);
+    addWorldDecision(sim, {
+      category: "social",
+      status: "automatic",
+      impact: need.kind === "sick" ? "medium" : "low",
+      title: `${guardian.name} responded to ${child.name}'s ${need.kind} need`,
+      summary: `${child.name} needed help, so ${guardian.name} changed plans to provide care.`,
+      actorId: guardian.id,
+      actorName: guardian.name,
+      householdId: child.householdId,
+      householdName: sim.households.find((household) => household.id === child.householdId)?.name,
+      relatedCitizenIds: [guardian.id, child.id],
+      relatedBuildingId: need.destinationId,
+      requiresApproval: false,
+      reason: "A child had a need they should not solve independently.",
+      effect: "The guardian redirected toward care instead of leaving the child to act like an adult.",
+    });
     markTransaction(guardian, sim, requestKey);
     markTransaction(child, sim, requestKey);
   }

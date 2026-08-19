@@ -1469,6 +1469,69 @@ h3 {
   margin-top: 5px;
 }
 
+.care-card {
+  background: #f7fbf8;
+  border: 1px solid #cfe4d8;
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.care-card-head {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.care-card span,
+.care-card p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.care-card strong {
+  color: var(--ink);
+  display: block;
+  font-size: 16px;
+  line-height: 1.2;
+  margin-top: 3px;
+}
+
+.care-card-head button,
+.care-list button {
+  background: #eef8f2;
+  border-color: #cbe2d4;
+  color: var(--green);
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.care-list {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.care-list button {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+  width: 100%;
+}
+
+.care-list strong {
+  font-size: 12px;
+  margin: 0;
+}
+
 .reasoning-card {
   display: grid;
   gap: 9px;
