@@ -35,6 +35,7 @@ http://localhost:5173
 - relationships with familiarity, friendship, trust, and dislike
 - stronger family and household relationships
 - household rent, shared cash, food stock, and stress
+- first-pass economy with wages, market purchases, clinic payments, rent, daily living costs, and transaction logs
 - children and some teens attend school
 - social conversations
 - conversation browser with topic/classification filters

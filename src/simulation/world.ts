@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, ConversationClassification, ConversationTopic, DailyActivity, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, WeatherState, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -49,6 +49,7 @@ function createDailyActivity(day: number): DailyActivity {
     conversations: 0,
     goalProgress: 0,
     earned: 0,
+    spent: 0,
   };
 }
 
@@ -272,6 +273,7 @@ function createCitizen(
       fun: Math.round(20 + rand() * 55),
       rest: Math.round(100 - (65 + rand() * 25)),
     },
+    lastTransactionAt: {},
     knownFacts: [],
     memories: [],
     relationships: {},
@@ -439,6 +441,15 @@ export function createSimulation(): SimulationState {
     factoryClosed: false,
     weather,
     totalConversations: 0,
+    transactionLog: [],
+    businessAccounts: {
+      factory: 18000,
+      market: 4200,
+      office: 9600,
+      clinic: 6800,
+      school: 5200,
+      town: 14000,
+    },
     conversationLog: [],
     households: town.households,
     citizens: town.citizens,
@@ -507,6 +518,152 @@ function addFeed(sim: SimulationState, text: string) {
   sim.feed = sim.feed.slice(0, 18);
 }
 
+function transactionKey(category: TransactionCategory, buildingId = "town") {
+  return `${category}:${buildingId}`;
+}
+
+function adjustBusiness(sim: SimulationState, id: string, delta: number) {
+  sim.businessAccounts[id] = Math.round((sim.businessAccounts[id] ?? 0) + delta);
+}
+
+function addTransaction(
+  sim: SimulationState,
+  transaction: Omit<EconomyTransaction, "id" | "day" | "time">,
+) {
+  const entry: EconomyTransaction = {
+    id: `${sim.day}-${Math.round(sim.minute)}-${sim.transactionLog.length}-${transaction.category}-${transaction.fromId}-${transaction.toId}`,
+    day: sim.day,
+    time: formatTime(sim.minute),
+    ...transaction,
+  };
+  sim.transactionLog.unshift(entry);
+  sim.transactionLog = sim.transactionLog.slice(0, 260);
+}
+
+function payCitizenWage(sim: SimulationState, citizen: Citizen, amount: number) {
+  if (amount <= 0 || !citizen.workplaceId) return;
+  const workplace = buildingById(citizen.workplaceId);
+  citizen.cash += amount;
+  citizen.today.earned += amount;
+  adjustBusiness(sim, workplace.id, -amount);
+  addTransaction(sim, {
+    category: "wage",
+    amount,
+    fromId: workplace.id,
+    fromName: workplace.name,
+    toId: citizen.id,
+    toName: citizen.name,
+    citizenId: citizen.id,
+    householdId: citizen.householdId,
+    buildingId: workplace.id,
+    note: `${citizen.name} earned wages from ${workplace.name}.`,
+  });
+}
+
+function payHouseholdCost(sim: SimulationState, household: Household, category: "rent" | "living", amount: number, note: string) {
+  const paid = Math.min(household.sharedCash, amount);
+  household.sharedCash -= paid;
+  household.stress = clamp(household.stress + (paid < amount ? 5 : 0), 0, 100);
+  adjustBusiness(sim, "town", paid);
+  addTransaction(sim, {
+    category,
+    amount: paid,
+    fromId: household.id,
+    fromName: household.name,
+    toId: "town",
+    toName: "Town services",
+    householdId: household.id,
+    note: paid < amount ? `${note} They could only cover $${Math.round(paid)}.` : note,
+  });
+}
+
+function spendAtBuilding(sim: SimulationState, citizen: Citizen, buildingId: string, category: "market" | "clinic", amount: number, note: string) {
+  const building = buildingById(buildingId);
+  const household = sim.households.find((item) => item.id === citizen.householdId);
+  let paidFrom = "cash";
+  let paid = Math.min(citizen.cash, amount);
+  citizen.cash -= paid;
+
+  if (paid < amount && household) {
+    const householdPaid = Math.min(household.sharedCash, amount - paid);
+    household.sharedCash -= householdPaid;
+    paid += householdPaid;
+    paidFrom = "cash and household funds";
+  }
+
+  citizen.today.spent += paid;
+  adjustBusiness(sim, building.id, paid);
+  addTransaction(sim, {
+    category,
+    amount: paid,
+    fromId: citizen.id,
+    fromName: citizen.name,
+    toId: building.id,
+    toName: building.name,
+    citizenId: citizen.id,
+    householdId: citizen.householdId,
+    buildingId: building.id,
+    note: paid < amount ? `${note} They could not afford the full $${amount}.` : `${note} Paid from ${paidFrom}.`,
+  });
+
+  if (paid < amount) {
+    citizen.mood = clamp(citizen.mood - 2.5, 0, 100);
+    citizen.problems = Array.from(new Set([...citizen.problems, "Money feels tight."]));
+  }
+  return paid;
+}
+
+function payPersonalCost(sim: SimulationState, citizen: Citizen, amount: number) {
+  if (amount <= 0) return;
+  const paid = Math.min(citizen.cash, amount);
+  citizen.cash -= paid;
+  citizen.today.spent += paid;
+  adjustBusiness(sim, "town", paid);
+  addTransaction(sim, {
+    category: "living",
+    amount: paid,
+    fromId: citizen.id,
+    fromName: citizen.name,
+    toId: "town",
+    toName: "Daily living costs",
+    citizenId: citizen.id,
+    householdId: citizen.householdId,
+    note: paid < amount ? `${citizen.name} could not fully cover daily costs.` : `${citizen.name} covered daily personal costs.`,
+  });
+  if (paid < amount) {
+    citizen.mood = clamp(citizen.mood - 2, 0, 100);
+    citizen.problems = Array.from(new Set([...citizen.problems, "Daily costs are hard to cover."]));
+  }
+}
+
+function contributeToHousehold(sim: SimulationState, citizen: Citizen, amount: number) {
+  const household = sim.households.find((item) => item.id === citizen.householdId);
+  if (!household || amount <= 0) return;
+  const contribution = Math.min(citizen.cash, amount);
+  citizen.cash -= contribution;
+  household.sharedCash += contribution;
+  addTransaction(sim, {
+    category: "living",
+    amount: contribution,
+    fromId: citizen.id,
+    fromName: citizen.name,
+    toId: household.id,
+    toName: household.name,
+    citizenId: citizen.id,
+    householdId: household.id,
+    note: `${citizen.name} contributed to shared household money.`,
+  });
+}
+
+function hasRecentTransaction(sim: SimulationState, citizen: Citizen, key: string, withinMinutes: number) {
+  const tick = brainTotalMinute(sim);
+  return (citizen.lastTransactionAt[key] ?? -Infinity) + withinMinutes > tick;
+}
+
+function markTransaction(citizen: Citizen, sim: SimulationState, key: string) {
+  citizen.lastTransactionAt[key] = brainTotalMinute(sim);
+}
+
 function applyAuthorityConsequences(sim: SimulationState, citizen: Citizen, authority: AuthorityCheck, actualIntention: AuthorityEvent["actualIntention"]) {
   if (!authority.expectedIntention || authority.outcome === "free") return;
 
@@ -573,6 +730,42 @@ function payFor(citizen: Citizen) {
   return 0;
 }
 
+function maybeApplyPlaceTransaction(sim: SimulationState, citizen: Citizen) {
+  if (!isAtDestination(citizen)) return;
+
+  if (citizen.destinationId === "market" && (citizen.currentIntention === "eat" || citizen.currentIntention === "errand")) {
+    const key = transactionKey("market", "market");
+    if (hasRecentTransaction(sim, citizen, key, 140)) return;
+    const household = sim.households.find((item) => item.id === citizen.householdId);
+    const mealCost = citizen.lifeStage === "child" ? 4 : citizen.lifeStage === "teen" ? 7 : 12;
+    const groceryCost = household && household.foodStock < 45 ? 28 : 0;
+    const amount = mealCost + groceryCost;
+    const paid = spendAtBuilding(sim, citizen, "market", "market", amount, groceryCost ? "Bought food and household groceries." : "Bought something to eat.");
+    if (paid > 0) {
+      citizen.needs.hunger = clamp(citizen.needs.hunger - 32, 0, 100);
+      citizen.needs.fun = clamp(citizen.needs.fun - 5, 0, 100);
+      citizen.mood = clamp(citizen.mood + 1.4, 0, 100);
+      if (household && groceryCost) household.foodStock = clamp(household.foodStock + 18, 0, 100);
+      addLifeJournal(sim, citizen, groceryCost ? "I spent money at the market and brought food back into the household." : "I bought food at the market.");
+    }
+    markTransaction(citizen, sim, key);
+  }
+
+  if (citizen.destinationId === "clinic" && citizen.currentIntention === "recover") {
+    const key = transactionKey("clinic", "clinic");
+    if (hasRecentTransaction(sim, citizen, key, 320)) return;
+    const amount = citizen.lifeStage === "child" ? 35 : citizen.lifeStage === "elder" ? 70 : 55;
+    const paid = spendAtBuilding(sim, citizen, "clinic", "clinic", amount, "Paid for care at the clinic.");
+    if (paid > 0) {
+      citizen.energy = clamp(citizen.energy + 12, 0, 100);
+      citizen.needs.rest = clamp(citizen.needs.rest - 18, 0, 100);
+      citizen.mood = clamp(citizen.mood + 1, 0, 100);
+      addLifeJournal(sim, citizen, "I paid for a clinic visit and felt a little steadier after.");
+    }
+    markTransaction(citizen, sim, key);
+  }
+}
+
 function updateDailyActivity(citizen: Citizen, simMinutes: number) {
   if (citizen.currentIntention === "work") citizen.today.workedMinutes += simMinutes;
   if (citizen.currentIntention === "school") citizen.today.schoolMinutes += simMinutes;
@@ -594,6 +787,7 @@ function summarizeDailyLife(citizen: Citizen, day: number) {
   if (citizen.today.conversations > 0) parts.push(`${citizen.today.conversations} conversation${citizen.today.conversations === 1 ? "" : "s"}`);
   if (citizen.today.goalProgress > 1) parts.push(`made ${Math.round(citizen.today.goalProgress)}% goal progress`);
   if (citizen.today.earned > 0) parts.push(`earned $${Math.round(citizen.today.earned)}`);
+  if (citizen.today.spent > 0) parts.push(`spent $${Math.round(citizen.today.spent)}`);
 
   const text = parts.length ? `Today I ${parts.join(", ")}.` : "Today passed quietly without anything major changing.";
   citizen.lifeJournal.unshift({
@@ -994,22 +1188,14 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
 
   if (sim.minute >= 1440) {
     const endedDay = sim.day;
-      sim.minute -= 1440;
-      sim.day += 1;
-      sim.weather = weatherForDay(sim.day);
-    for (const household of sim.households) {
-      const members = sim.citizens.filter((citizen) => citizen.householdId === household.id);
-      const earners = members.filter((citizen) => citizen.workplaceId !== null);
-      household.sharedCash += earners.reduce((sum, citizen) => sum + payFor(citizen), 0);
-      household.foodStock = clamp(household.foodStock - members.length * 4, 0, 100);
-      household.sharedCash -= household.rent / 30;
-      household.stress = clamp(45 - household.foodStock * 0.25 + (household.sharedCash < household.rent ? 32 : 0), 0, 100);
-    }
+    sim.minute -= 1440;
+    sim.day += 1;
+    sim.weather = weatherForDay(sim.day);
     for (const citizen of sim.citizens) {
       const earned = payFor(citizen);
-      citizen.today.earned += earned;
-      citizen.cash += earned;
-      citizen.cash -= dailyPersonalCost(citizen);
+      payCitizenWage(sim, citizen, earned);
+      contributeToHousehold(sim, citizen, Math.round(earned * 0.32));
+      payPersonalCost(sim, citizen, dailyPersonalCost(citizen));
       citizen.energy = clamp(citizen.energy + 22, 0, 100);
       citizen.social = clamp(citizen.social - 10, 0, 100);
       citizen.needs.hunger = clamp(citizen.needs.hunger + 18, 0, 100);
@@ -1027,6 +1213,14 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
       citizen.committedUntil = brainTotalMinute(sim) + 30;
       brainRefreshPersonalGoals(sim, citizen, addLifeJournal);
       brainUpdateEmotionAndProblems(sim, citizen);
+    }
+    for (const household of sim.households) {
+      const members = sim.citizens.filter((citizen) => citizen.householdId === household.id);
+      const foodCost = Math.max(10, members.length * 9);
+      household.foodStock = clamp(household.foodStock - members.length * 4, 0, 100);
+      payHouseholdCost(sim, household, "rent", household.rent / 30, `${household.name} paid daily rent.`);
+      payHouseholdCost(sim, household, "living", foodCost, `${household.name} covered shared utilities and pantry basics.`);
+      household.stress = clamp(45 - household.foodStock * 0.25 + (household.sharedCash < household.rent ? 32 : 0), 0, 100);
     }
     addFeed(sim, `A new day begins with ${sim.weather.kind} weather around ${sim.weather.temperature}F.`);
   }
@@ -1047,6 +1241,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     updateDailyActivity(citizen, minutesToAdvance);
     brainUpdateGoalProgress(sim, citizen, minutesToAdvance, addLifeJournal);
     moveCitizen(citizen, minutesToAdvance);
+    maybeApplyPlaceTransaction(sim, citizen);
     if (citizen.conversationUntil <= tick) citizen.conversationWithId = null;
   }
   applyPersonalSpace(sim.citizens);
@@ -1065,6 +1260,9 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
 export function snapshot(sim: SimulationState): SimulationSnapshot {
   const averageMood = sim.citizens.reduce((sum, citizen) => sum + citizen.mood, 0) / sim.citizens.length;
   const rumorReach = sim.citizens.filter((citizen) => knows(citizen, FACTORY_RUMOR)).length / sim.citizens.length;
+  const householdCash = sim.households.reduce((sum, household) => sum + household.sharedCash, 0);
+  const citizenCash = sim.citizens.reduce((sum, citizen) => sum + citizen.cash, 0);
+  const businessRevenue = ["market", "clinic"].reduce((sum, id) => sum + (sim.businessAccounts[id] ?? 0), 0);
   return {
     day: sim.day,
     time: formatTime(sim.minute),
@@ -1073,5 +1271,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     averageMood: Math.round(averageMood),
     rumorReach: Math.round(rumorReach * 100),
     totalConversations: sim.totalConversations,
+    townCash: Math.round(householdCash + citizenCash),
+    businessRevenue: Math.round(businessRevenue),
   };
 }

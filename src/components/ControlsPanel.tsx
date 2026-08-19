@@ -16,6 +16,9 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
   const households = sim.households.length;
   const children = sim.citizens.filter((citizen) => citizen.lifeStage === "child").length;
   const teens = sim.citizens.filter((citizen) => citizen.lifeStage === "teen").length;
+  const townCash = sim.citizens.reduce((sum, citizen) => sum + citizen.cash, 0) + sim.households.reduce((sum, household) => sum + household.sharedCash, 0);
+  const marketRevenue = sim.businessAccounts.market ?? 0;
+  const clinicRevenue = sim.businessAccounts.clinic ?? 0;
 
   return (
     <aside className="panel">
@@ -76,6 +79,42 @@ export function ControlsPanel({ sim, onTogglePaused, onSetSpeed, onSeedRumor, on
             <strong>{schoolStaff}</strong>
           </div>
         </div>
+      </div>
+
+      <div className="panel-section town-section">
+        <h3>Economy</h3>
+        <div className="town-facts">
+          <div>
+            <span>Town cash</span>
+            <strong>${Math.round(townCash).toLocaleString()}</strong>
+          </div>
+          <div>
+            <span>Transactions</span>
+            <strong>{sim.transactionLog.length}</strong>
+          </div>
+          <div>
+            <span>Market</span>
+            <strong>${Math.round(marketRevenue).toLocaleString()}</strong>
+          </div>
+          <div>
+            <span>Clinic</span>
+            <strong>${Math.round(clinicRevenue).toLocaleString()}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel-section">
+        <h3>Recent Money</h3>
+        <ol className="feed-list transaction-list">
+          {(sim.transactionLog.length ? sim.transactionLog.slice(0, 8) : []).map((entry) => (
+            <li key={entry.id}>
+              <strong>{entry.time} · ${Math.round(entry.amount).toLocaleString()}</strong>
+              <span>{entry.fromName}{" -> "}{entry.toName}</span>
+              <small>{entry.note}</small>
+            </li>
+          ))}
+          {!sim.transactionLog.length ? <li>No money has moved yet.</li> : null}
+        </ol>
       </div>
 
       <div className="panel-section">
