@@ -204,11 +204,16 @@ function destinationStop(slot: PlaceSlot, citizen: Citizen, rand: () => number) 
 }
 
 function buildRoute(citizen: Citizen, destinationId: string, target: RoutePoint) {
-  const startAnchor = routeAnchorFor(citizen.destinationId, citizen);
-  const endAnchor = routeAnchorFor(destinationId, citizen);
   const route: RoutePoint[] = [];
 
   addRoutePoint(route, { x: citizen.x, y: citizen.y });
+  if (citizen.destinationId === destinationId) {
+    addRoutePoint(route, target);
+    return route.slice(1);
+  }
+
+  const startAnchor = routeAnchorFor(citizen.destinationId, citizen);
+  const endAnchor = routeAnchorFor(destinationId, citizen);
   if (Math.hypot(citizen.x - startAnchor.x, citizen.y - startAnchor.y) > 28) {
     addRoutePoint(route, startAnchor);
   }
