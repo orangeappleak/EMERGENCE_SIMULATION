@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -444,6 +444,20 @@ export function createSimulation(): SimulationState {
     factoryClosed: false,
     weather,
     totalConversations: 0,
+    worldDecisions: [{
+      id: "start-decision-log",
+      day: 1,
+      time: "07:55",
+      category: "civic",
+      status: "automatic",
+      impact: "medium",
+      title: "Northbridge starts observing town decisions",
+      summary: "The town now keeps a civic record of important choices, pressures, and future approval items.",
+      relatedCitizenIds: [],
+      requiresApproval: false,
+      reason: "Major autonomous behavior needs a visible history before AI and leadership systems arrive.",
+      effect: "Important citizen, household, and civic events will appear in the World Decisions panel.",
+    }],
     transactionLog: [],
     businessAccounts: {
       factory: 18000,
@@ -508,6 +522,21 @@ function addAuthorityEvent(
   citizen.recentAuthorityEvents.unshift(event);
   citizen.recentAuthorityEvents = citizen.recentAuthorityEvents.slice(0, 10);
   citizen.today.authorityEvents += 1;
+  addWorldDecision(sim, {
+    category: "authority",
+    status: "automatic",
+    impact: authority.outcome === "blocked" || authority.outcome === "defied" ? "medium" : "low",
+    title: `${citizen.name} ${authority.outcome} a ${authority.expectedIntention} expectation`,
+    summary: consequence,
+    actorId: citizen.id,
+    actorName: citizen.name,
+    householdId: citizen.householdId,
+    relatedCitizenIds: [citizen.id],
+    relatedBuildingId: authority.expectedDestinationId ?? undefined,
+    requiresApproval: false,
+    reason: authority.reason,
+    effect: `Expected ${authority.expectedIntention}, actual ${actualIntention}.`,
+  });
 }
 
 function addFeed(sim: SimulationState, text: string) {
@@ -519,6 +548,24 @@ function addFeed(sim: SimulationState, text: string) {
   };
   if (sim.feed[0]?.text !== text) sim.feed.unshift(event);
   sim.feed = sim.feed.slice(0, 18);
+}
+
+function addWorldDecision(sim: SimulationState, decision: Omit<WorldDecision, "id" | "day" | "time">) {
+  const repeated = sim.worldDecisions.some((entry) => (
+    entry.day === sim.day
+    && entry.title === decision.title
+    && entry.actorId === decision.actorId
+    && entry.householdId === decision.householdId
+  ));
+  if (repeated) return;
+
+  sim.worldDecisions.unshift({
+    id: `${sim.day}-${Math.round(sim.minute)}-${sim.worldDecisions.length}-${decision.category}-${decision.title}`,
+    day: sim.day,
+    time: formatTime(sim.minute),
+    ...decision,
+  });
+  sim.worldDecisions = sim.worldDecisions.slice(0, 220);
 }
 
 function transactionKey(category: TransactionCategory, buildingId = "town") {
@@ -560,6 +607,21 @@ function payCitizenWage(sim: SimulationState, citizen: Citizen, amount: number) 
     householdId: citizen.householdId,
     buildingId: workplace.id,
     note: `${citizen.name} earned wages from ${workplace.name}.`,
+  });
+  addWorldDecision(sim, {
+    category: "economy",
+    status: "automatic",
+    impact: amount >= 100 ? "medium" : "low",
+    title: `${citizen.name} earned a paycheck`,
+    summary: `${citizen.name} earned $${Math.round(amount).toLocaleString()} from ${workplace.name}.`,
+    actorId: citizen.id,
+    actorName: citizen.name,
+    householdId: citizen.householdId,
+    relatedCitizenIds: [citizen.id],
+    relatedBuildingId: workplace.id,
+    requiresApproval: false,
+    reason: "They completed enough of their work shift to be paid.",
+    effect: "Personal cash increased and their employer account paid wages.",
   });
 }
 
@@ -604,6 +666,20 @@ function updateHouseholdFinanceStatus(sim: SimulationState, household: Household
 
   if (previousStatus !== household.financialStatus && household.financialStatus !== "stable") {
     addFeed(sim, `${household.name} is now financially ${household.financialStatus}.`);
+    addWorldDecision(sim, {
+      category: "economy",
+      status: "automatic",
+      impact: household.financialStatus === "critical" ? "high" : "medium",
+      title: `${household.name} became financially ${household.financialStatus}`,
+      summary: household.lastMoneyNote,
+      householdId: household.id,
+      householdName: household.name,
+      relatedCitizenIds: members.map((citizen) => citizen.id),
+      relatedBuildingId: household.homeId,
+      requiresApproval: false,
+      reason: "Unpaid bills, shared cash, and food stock crossed a household pressure threshold.",
+      effect: "Household members become more worried and may make more money-conscious choices.",
+    });
   }
 
   if (household.financialStatus === "stable") return;
@@ -654,6 +730,23 @@ function spendAtBuilding(sim: SimulationState, citizen: Citizen, buildingId: str
   if (paid < amount) {
     citizen.mood = clamp(citizen.mood - 2.5, 0, 100);
     citizen.problems = Array.from(new Set([...citizen.problems, "Money feels tight."]));
+  }
+  if (paid >= 25 || paid < amount) {
+    addWorldDecision(sim, {
+      category: "economy",
+      status: "automatic",
+      impact: paid < amount ? "medium" : "low",
+      title: `${citizen.name} spent money at ${building.name}`,
+      summary: `${citizen.name} paid $${Math.round(paid).toLocaleString()} at ${building.name}.`,
+      actorId: citizen.id,
+      actorName: citizen.name,
+      householdId: citizen.householdId,
+      relatedCitizenIds: [citizen.id],
+      relatedBuildingId: building.id,
+      requiresApproval: false,
+      reason: note,
+      effect: paid < amount ? "The shortfall increased personal money pressure." : "Money moved from the citizen or household to a town business.",
+    });
   }
   return paid;
 }
@@ -1208,6 +1301,23 @@ function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: number) {
   addConversationEntry(sim, a, b, topic, classification, classificationReason, aText);
   addConversationEntry(sim, b, a, topic, classification, classificationReason, bText);
   addGlobalConversation(sim, a, b, topic, classification, classificationReason, `${aText} ${bText}`);
+  if (classification === "serious" || classification === "planning" || classification === "secretive") {
+    addWorldDecision(sim, {
+      category: "social",
+      status: "automatic",
+      impact: classification === "planning" ? "medium" : "low",
+      title: `${a.name} and ${b.name} had a ${classification} conversation`,
+      summary: `${a.name} and ${b.name} talked about ${topic}.`,
+      actorId: a.id,
+      actorName: a.name,
+      householdId: a.householdId === b.householdId ? a.householdId : undefined,
+      relatedCitizenIds: [a.id, b.id],
+      relatedBuildingId: conversationLocation(a, b).building.id,
+      requiresApproval: false,
+      reason: classificationReason,
+      effect: "The conversation can shape memories, trust, goals, or civic awareness later.",
+    });
+  }
   a.currentThought = `I keep thinking about what ${b.name} said.`;
   b.currentThought = `I keep thinking about what ${a.name} said.`;
   a.currentEmotion = emotionAfterConversation(topic);
@@ -1246,8 +1356,10 @@ export function seedRumor(sim: SimulationState) {
 export function collapseFactory(sim: SimulationState) {
   if (sim.factoryClosed) return;
   sim.factoryClosed = true;
+  const affectedCitizenIds: string[] = [];
   for (const citizen of sim.citizens) {
     if (citizen.workplaceId === "factory") {
+      affectedCitizenIds.push(citizen.id);
       citizen.workplaceId = null;
       citizen.job = "Unemployed";
       citizen.careerProgress = null;
@@ -1258,6 +1370,18 @@ export function collapseFactory(sim: SimulationState) {
     }
   }
   addFeed(sim, "Northbridge Works closed. Factory workers lost their jobs.");
+  addWorldDecision(sim, {
+    category: "civic",
+    status: "automatic",
+    impact: "high",
+    title: "Northbridge Works closed",
+    summary: "Factory workers lost their jobs, and the town economy changed immediately.",
+    relatedCitizenIds: affectedCitizenIds,
+    relatedBuildingId: "factory",
+    requiresApproval: false,
+    reason: "The factory collapse was triggered from the controls panel.",
+    effect: "Former factory workers lose income and may become part of future civic pressure.",
+  });
 }
 
 export function stepSimulation(sim: SimulationState, realMs: number) {
@@ -1343,6 +1467,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
   const householdCash = sim.households.reduce((sum, household) => sum + household.sharedCash, 0);
   const citizenCash = sim.citizens.reduce((sum, citizen) => sum + citizen.cash, 0);
   const businessRevenue = ["market", "clinic"].reduce((sum, id) => sum + (sim.businessAccounts[id] ?? 0), 0);
+  const majorDecisions = sim.worldDecisions.filter((decision) => decision.impact === "high" || decision.impact === "medium").length;
   return {
     day: sim.day,
     time: formatTime(sim.minute),
@@ -1353,5 +1478,6 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     totalConversations: sim.totalConversations,
     townCash: Math.round(householdCash + citizenCash),
     businessRevenue: Math.round(businessRevenue),
+    majorDecisions,
   };
 }

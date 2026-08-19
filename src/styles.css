@@ -910,6 +910,140 @@ h3 {
   line-height: 1.3;
 }
 
+.world-decisions-panel {
+  gap: 12px;
+}
+
+.decision-filter-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.world-decision-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+.world-decision-list li {
+  background: #f6f7f7;
+  border: 1px solid #e5e8ea;
+  border-left: 5px solid #a9b4ba;
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.world-decision-list li.decision-impact-high {
+  border-left-color: var(--red);
+}
+
+.world-decision-list li.decision-impact-medium {
+  border-left-color: var(--blue);
+}
+
+.world-decision-list li.decision-impact-low {
+  border-left-color: var(--green);
+}
+
+.decision-entry-head {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.decision-entry-head strong,
+.decision-entry-head span,
+.decision-entry-head em {
+  display: block;
+}
+
+.decision-entry-head strong {
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.decision-entry-head span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  margin-top: 4px;
+}
+
+.decision-entry-head em {
+  background: #fff;
+  border: 1px solid #e0e4e7;
+  border-radius: 999px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+  padding: 4px 8px;
+}
+
+.world-decision-list p {
+  color: #31383f;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.decision-entry-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.decision-entry-grid div {
+  background: #fff;
+  border: 1px solid #e4e8eb;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.decision-entry-grid span,
+.decision-entry-grid strong {
+  display: block;
+}
+
+.decision-entry-grid span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.decision-entry-grid strong {
+  font-size: 12px;
+  line-height: 1.3;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.decision-people-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.decision-people-row button {
+  background: #eef4fb;
+  border-color: #d5e1ed;
+  color: var(--blue);
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 9px;
+}
+
 .detail-list li:has(.person-link) {
   padding: 0;
 }

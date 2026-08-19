@@ -31,6 +31,10 @@ export function MetricsBar({ summary }: MetricsBarProps) {
         <span>Town Cash</span>
         <strong>${summary.townCash.toLocaleString()}</strong>
       </div>
+      <div>
+        <span>Major Decisions</span>
+        <strong>{summary.majorDecisions}</strong>
+      </div>
     </section>
   );
 }
