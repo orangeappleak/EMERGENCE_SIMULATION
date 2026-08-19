@@ -44,6 +44,7 @@ http://localhost:5173
 - life journals, needs, emotions, problems, and personal goals
 - factory rumor propagation
 - factory collapse experiment
+- clickable building interiors with room floorplans, furniture, and room occupancy
 - clickable citizen profile panel
 - searchable people browser with clickable relationships
 - precise citizen location labels, like `Maple House · kitchen`
@@ -57,6 +58,7 @@ http://localhost:5173
 ```text
 src/
   components/
+    BuildingInterior.tsx
     CitizenProfile.tsx
     ConversationsBrowser.tsx
     ControlsPanel.tsx

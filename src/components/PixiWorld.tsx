@@ -7,15 +7,18 @@ type PixiWorldProps = {
   selectedCitizenId: string;
   followSelected: boolean;
   onSelectCitizen: (citizenId: string) => void;
+  onSelectBuilding: (buildingId: string) => void;
 };
 
-export function PixiWorld({ sim, selectedCitizenId, followSelected, onSelectCitizen }: PixiWorldProps) {
+export function PixiWorld({ sim, selectedCitizenId, followSelected, onSelectCitizen, onSelectBuilding }: PixiWorldProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<Awaited<ReturnType<typeof createPixiWorld>> | null>(null);
   const selectRef = useRef(onSelectCitizen);
+  const buildingRef = useRef(onSelectBuilding);
   const [bootError, setBootError] = useState<string | null>(null);
 
   selectRef.current = onSelectCitizen;
+  buildingRef.current = onSelectBuilding;
 
   useEffect(() => {
     let cancelled = false;
@@ -23,7 +26,11 @@ export function PixiWorld({ sim, selectedCitizenId, followSelected, onSelectCiti
     async function boot() {
       if (!hostRef.current || worldRef.current) return;
       try {
-        const world = await createPixiWorld(hostRef.current, (id) => selectRef.current(id));
+        const world = await createPixiWorld(
+          hostRef.current,
+          (id) => selectRef.current(id),
+          (id) => buildingRef.current(id)
+        );
         if (cancelled) {
           world.destroy();
           return;
