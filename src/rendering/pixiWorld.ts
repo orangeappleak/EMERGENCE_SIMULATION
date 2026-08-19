@@ -12,12 +12,17 @@ const MAX_ZOOM = 2.25;
 type CitizenSprite = {
   root: PIXI.Container;
   sprite: PIXI.Sprite;
-  frames: PIXI.Texture[];
-  facingFrame: number;
+  idleFrames: Record<CitizenDirection, PIXI.Texture>;
+  walkFrames: Record<CitizenDirection, PIXI.Texture[]>;
+  facingDirection: CitizenDirection;
+  lastX: number;
+  lastY: number;
   marker: PIXI.Sprite;
   talkBubble: PIXI.Container;
   selection: PIXI.Graphics;
 };
+
+type CitizenDirection = "down" | "left" | "up" | "right";
 
 type PixiWorld = {
   app: PIXI.Application;
@@ -369,14 +374,31 @@ function fitRendererToHost(app: PIXI.Application, host: HTMLElement, viewport: P
   return () => observer.disconnect();
 }
 
-function npcFrames(texture: PIXI.Texture, index: number) {
+function frameFromSheet(texture: PIXI.Texture, col: number, row: number) {
   const frameWidth = 32;
   const frameHeight = 32;
-  const row = index % 5;
-  return Array.from({ length: 4 }, (_, frameIndex) => new PIXI.Texture({
+  return new PIXI.Texture({
     source: texture.source,
-    frame: new PIXI.Rectangle(frameIndex * frameWidth, row * frameHeight, frameWidth, frameHeight),
-  }));
+    frame: new PIXI.Rectangle(col * frameWidth, row * frameHeight, frameWidth, frameHeight),
+  });
+}
+
+function npcFrames(texture: PIXI.Texture) {
+  const directions: CitizenDirection[] = ["down", "left", "up", "right"];
+  const directionRows: Record<CitizenDirection, number> = {
+    down: 1,
+    left: 2,
+    up: 3,
+    right: 4,
+  };
+
+  return {
+    idleFrames: Object.fromEntries(directions.map((direction, index) => [direction, frameFromSheet(texture, index, 0)])) as Record<CitizenDirection, PIXI.Texture>,
+    walkFrames: Object.fromEntries(directions.map((direction) => [
+      direction,
+      Array.from({ length: 4 }, (_, frameIndex) => frameFromSheet(texture, frameIndex, directionRows[direction])),
+    ])) as Record<CitizenDirection, PIXI.Texture[]>,
+  };
 }
 
 function makeTalkBubble() {
@@ -399,8 +421,8 @@ function makeCitizenSprite(citizen: Citizen, textures: Record<string, PIXI.Textu
   });
 
   const sheet = GAME_ASSETS.npcs[Number(citizen.id.split("_")[1]) % GAME_ASSETS.npcs.length];
-  const frames = npcFrames(textures[sheet], Number(citizen.id.split("_")[1]));
-  const sprite = new PIXI.Sprite(frames[0]);
+  const frames = npcFrames(textures[sheet]);
+  const sprite = new PIXI.Sprite(frames.idleFrames.down);
   sprite.anchor.set(0.5, 0.82);
   sprite.scale.set(1.6);
 
@@ -412,12 +434,20 @@ function makeCitizenSprite(citizen: Citizen, textures: Record<string, PIXI.Textu
 
   const talkBubble = makeTalkBubble();
   root.addChild(selection, sprite, marker, talkBubble);
-  return { root, sprite, frames, facingFrame: 0, marker, talkBubble, selection };
+  return {
+    root,
+    sprite,
+    ...frames,
+    facingDirection: "down",
+    lastX: citizen.x,
+    lastY: citizen.y,
+    marker,
+    talkBubble,
+    selection,
+  };
 }
 
 function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: boolean) {
-  view.root.position.set(citizen.x, citizen.y);
-  view.root.zIndex = citizen.y;
   view.marker.visible = citizen.knownFacts.includes(FACTORY_RUMOR);
   view.talkBubble.visible = citizen.conversationWithId !== null;
   view.selection.clear();
@@ -426,22 +456,30 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
     view.selection.ellipse(0, 6, 16, 8).stroke({ color: "#f7d35f", width: 3 });
   }
 
-  const dx = citizen.targetX - citizen.x;
-  const dy = citizen.targetY - citizen.y;
-  const distanceToTarget = Math.hypot(dx, dy);
-  const walking = distanceToTarget > 5 && citizen.currentIntention !== "sleep";
+  const moveDx = citizen.x - view.lastX;
+  const moveDy = citizen.y - view.lastY;
+  const targetDx = citizen.targetX - citizen.x;
+  const targetDy = citizen.targetY - citizen.y;
+  const movementDistance = Math.hypot(moveDx, moveDy);
+  const distanceToTarget = Math.hypot(targetDx, targetDy);
+  const walking = (movementDistance > 0.3 || distanceToTarget > 5) && citizen.currentIntention !== "sleep";
   const citizenIndex = Number(citizen.id.split("_")[1]);
   const now = performance.now();
 
   if (walking) {
-    if (Math.abs(dx) > Math.abs(dy)) {
-      view.facingFrame = dx < 0 ? 3 : 1;
+    const directionDx = movementDistance > 0.3 ? moveDx : targetDx;
+    const directionDy = movementDistance > 0.3 ? moveDy : targetDy;
+    if (Math.abs(directionDx) > Math.abs(directionDy)) {
+      view.facingDirection = directionDx < 0 ? "left" : "right";
     } else {
-      view.facingFrame = dy < 0 ? 2 : 0;
+      view.facingDirection = directionDy < 0 ? "up" : "down";
     }
   }
 
-  view.sprite.texture = view.frames[view.facingFrame];
+  const walkCycleFrame = Math.floor(now / 140 + citizenIndex) % 4;
+  view.sprite.texture = walking
+    ? view.walkFrames[view.facingDirection][walkCycleFrame]
+    : view.idleFrames[view.facingDirection];
   view.sprite.scale.x = 1.6;
   view.sprite.scale.y = 1.6;
   view.sprite.y = walking
@@ -450,6 +488,10 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   view.sprite.rotation = 0;
   view.talkBubble.y = view.talkBubble.visible ? Math.sin(now / 180 + citizenIndex) * 1.2 : 0;
   view.marker.y = walking ? Math.sin(now / 140 + citizenIndex) * 0.8 : 0;
+  view.root.position.set(citizen.x, citizen.y);
+  view.root.zIndex = citizen.y;
+  view.lastX = citizen.x;
+  view.lastY = citizen.y;
 }
 
 export async function createPixiWorld(
