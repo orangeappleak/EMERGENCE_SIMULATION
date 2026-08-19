@@ -25,6 +25,15 @@ const HOME_IDS = BUILDINGS.filter((building) => building.kind === "home").map((b
 const TOWN_ROUTE_SPINE_Y = 322;
 const TOWN_ROUTE_SPINE_X = 456;
 const ROUTE_EPSILON = 6;
+const ROUTE_LANES: RoutePoint[] = [
+  { x: -18, y: -10 },
+  { x: -9, y: 8 },
+  { x: 0, y: -14 },
+  { x: 10, y: 10 },
+  { x: 18, y: -4 },
+  { x: -22, y: 14 },
+  { x: 22, y: 14 },
+];
 
 const BUILDING_ROUTE_ANCHORS: Record<string, RoutePoint> = {
   home_01: { x: 202, y: 264 },
@@ -136,8 +145,21 @@ function chooseDestinationSlot(citizen: Citizen, destinationId: string, intentio
   return firstSlot(destinationId);
 }
 
-function routeAnchorFor(buildingId: string) {
-  return BUILDING_ROUTE_ANCHORS[buildingId] ?? centerOf(buildingId);
+function citizenNumber(citizen: Citizen) {
+  return Number(citizen.id.split("_")[1]) || 0;
+}
+
+function routeLaneFor(citizen: Citizen) {
+  return ROUTE_LANES[citizenNumber(citizen) % ROUTE_LANES.length];
+}
+
+function routeAnchorFor(buildingId: string, citizen: Citizen) {
+  const anchor = BUILDING_ROUTE_ANCHORS[buildingId] ?? centerOf(buildingId);
+  const lane = routeLaneFor(citizen);
+  return {
+    x: anchor.x + lane.x,
+    y: anchor.y + lane.y,
+  };
 }
 
 function addRoutePoint(route: RoutePoint[], point: RoutePoint) {
@@ -147,25 +169,43 @@ function addRoutePoint(route: RoutePoint[], point: RoutePoint) {
   }
 }
 
-function routeToSpine(anchor: RoutePoint) {
+function routeToSpine(anchor: RoutePoint, citizen: Citizen) {
+  const lane = routeLaneFor(citizen);
+  const spineY = TOWN_ROUTE_SPINE_Y + lane.y * 0.45;
+  const spineX = TOWN_ROUTE_SPINE_X + lane.x * 0.25;
   const route: RoutePoint[] = [];
   addRoutePoint(route, anchor);
-  addRoutePoint(route, { x: anchor.x, y: TOWN_ROUTE_SPINE_Y });
-  addRoutePoint(route, { x: TOWN_ROUTE_SPINE_X, y: TOWN_ROUTE_SPINE_Y });
+  addRoutePoint(route, { x: anchor.x, y: spineY });
+  addRoutePoint(route, { x: spineX, y: spineY });
   return route;
 }
 
-function routeFromSpine(anchor: RoutePoint) {
+function routeFromSpine(anchor: RoutePoint, citizen: Citizen) {
+  const lane = routeLaneFor(citizen);
+  const spineY = TOWN_ROUTE_SPINE_Y + lane.y * 0.45;
+  const spineX = TOWN_ROUTE_SPINE_X + lane.x * 0.25;
   const route: RoutePoint[] = [];
-  addRoutePoint(route, { x: TOWN_ROUTE_SPINE_X, y: TOWN_ROUTE_SPINE_Y });
-  addRoutePoint(route, { x: anchor.x, y: TOWN_ROUTE_SPINE_Y });
+  addRoutePoint(route, { x: spineX, y: spineY });
+  addRoutePoint(route, { x: anchor.x, y: spineY });
   addRoutePoint(route, anchor);
   return route;
+}
+
+function destinationStop(slot: PlaceSlot, citizen: Citizen, rand: () => number) {
+  const index = citizenNumber(citizen);
+  const angle = (index * 137.5 * Math.PI) / 180;
+  const ring = 0.32 + (index % 5) * 0.16;
+  const stableSpread = Math.max(8, slot.radius * Math.min(1.05, ring));
+  const jitter = Math.max(2, slot.radius * 0.18);
+  return {
+    x: slot.x + Math.cos(angle) * stableSpread + (rand() - 0.5) * jitter,
+    y: slot.y + Math.sin(angle) * stableSpread + (rand() - 0.5) * jitter,
+  };
 }
 
 function buildRoute(citizen: Citizen, destinationId: string, target: RoutePoint) {
-  const startAnchor = routeAnchorFor(citizen.destinationId);
-  const endAnchor = routeAnchorFor(destinationId);
+  const startAnchor = routeAnchorFor(citizen.destinationId, citizen);
+  const endAnchor = routeAnchorFor(destinationId, citizen);
   const route: RoutePoint[] = [];
 
   addRoutePoint(route, { x: citizen.x, y: citizen.y });
@@ -174,8 +214,8 @@ function buildRoute(citizen: Citizen, destinationId: string, target: RoutePoint)
   }
 
   if (Math.hypot(startAnchor.x - endAnchor.x, startAnchor.y - endAnchor.y) > 34) {
-    for (const point of routeToSpine(startAnchor)) addRoutePoint(route, point);
-    for (const point of routeFromSpine(endAnchor)) addRoutePoint(route, point);
+    for (const point of routeToSpine(startAnchor, citizen)) addRoutePoint(route, point);
+    for (const point of routeFromSpine(endAnchor, citizen)) addRoutePoint(route, point);
   } else {
     addRoutePoint(route, endAnchor);
   }
@@ -1424,10 +1464,7 @@ function setDestination(citizen: Citizen, destinationId: string, rand: () => num
   if (citizen.destinationId === destinationId && Math.hypot(citizen.targetX - citizen.x, citizen.targetY - citizen.y) > 7) {
     return;
   }
-  const target = {
-    x: slot.x + (rand() - 0.5) * slot.radius * 1.6,
-    y: slot.y + (rand() - 0.5) * slot.radius * 1.6,
-  };
+  const target = destinationStop(slot, citizen, rand);
   citizen.route = buildRoute(citizen, destinationId, target);
   citizen.destinationId = destinationId;
   citizen.destinationSlotId = slot.id;
