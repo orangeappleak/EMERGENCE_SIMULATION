@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConversationsBrowser } from "./components/ConversationsBrowser";
 import { BuildingInterior } from "./components/BuildingInterior";
 import { CitizenProfile } from "./components/CitizenProfile";
+import { CivicIssuesBrowser } from "./components/CivicIssuesBrowser";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { MetricsBar } from "./components/MetricsBar";
 import { PeopleBrowser } from "./components/PeopleBrowser";
@@ -18,6 +19,7 @@ export default function App() {
   const [conversationsOpen, setConversationsOpen] = useState(false);
   const [transactionsOpen, setTransactionsOpen] = useState(false);
   const [worldDecisionsOpen, setWorldDecisionsOpen] = useState(false);
+  const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
@@ -60,6 +62,7 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -73,6 +76,7 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -86,6 +90,7 @@ export default function App() {
               setPeopleOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -99,6 +104,7 @@ export default function App() {
               setPeopleOpen(false);
               setConversationsOpen(false);
               setWorldDecisionsOpen(false);
+              setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -112,10 +118,25 @@ export default function App() {
               setPeopleOpen(false);
               setConversationsOpen(false);
               setTransactionsOpen(false);
+              setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
             {worldDecisionsOpen ? "Hide Decisions" : "Decisions"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCivicIssuesOpen((open) => !open);
+              setControlsOpen(false);
+              setPeopleOpen(false);
+              setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
+              setSelectedBuildingId(null);
+            }}
+          >
+            {civicIssuesOpen ? "Hide Issues" : "Issues"}
           </button>
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
@@ -171,6 +192,10 @@ export default function App() {
           <div className="drawer drawer-center">
             <TransactionsBrowser
               sim={simulation.sim}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
               onClose={() => setTransactionsOpen(false)}
             />
           </div>
@@ -185,6 +210,19 @@ export default function App() {
                 setProfileOpen(true);
               }}
               onClose={() => setWorldDecisionsOpen(false)}
+            />
+          </div>
+        ) : null}
+
+        {civicIssuesOpen ? (
+          <div className="drawer drawer-center">
+            <CivicIssuesBrowser
+              sim={simulation.sim}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
+              onClose={() => setCivicIssuesOpen(false)}
             />
           </div>
         ) : null}
@@ -204,6 +242,7 @@ export default function App() {
             setConversationsOpen(false);
             setTransactionsOpen(false);
             setWorldDecisionsOpen(false);
+            setCivicIssuesOpen(false);
           }}
         />
 

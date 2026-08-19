@@ -35,6 +35,10 @@ export function MetricsBar({ summary }: MetricsBarProps) {
         <span>Major Decisions</span>
         <strong>{summary.majorDecisions}</strong>
       </div>
+      <div>
+        <span>Active Issues</span>
+        <strong>{summary.activeIssues}</strong>
+      </div>
     </section>
   );
 }

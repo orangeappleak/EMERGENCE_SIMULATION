@@ -91,6 +91,24 @@ export type WorldDecisionStatus = "automatic" | "pending" | "approved" | "reject
 
 export type WorldDecisionImpact = "low" | "medium" | "high";
 
+export type CivicIssueKind = "healthcare" | "money" | "employment" | "education" | "governance" | "food";
+
+export type CivicIssueStatus = "watching" | "active" | "urgent" | "resolved";
+
+export type CivicIssue = {
+  id: string;
+  kind: CivicIssueKind;
+  title: string;
+  status: CivicIssueStatus;
+  severity: number;
+  awareness: number;
+  affectedCitizenIds: string[];
+  evidence: string[];
+  firstSeenDay: number;
+  lastUpdatedDay: number;
+  lastUpdatedTime: string;
+};
+
 export type WorldDecision = {
   id: string;
   day: number;
@@ -343,6 +361,7 @@ export type SimulationState = {
   weather: WeatherState;
   totalConversations: number;
   worldDecisions: WorldDecision[];
+  civicIssues: CivicIssue[];
   transactionLog: EconomyTransaction[];
   businessAccounts: Record<string, number>;
   conversationLog: ConversationEntry[];
@@ -362,4 +381,5 @@ export type SimulationSnapshot = {
   townCash: number;
   businessRevenue: number;
   majorDecisions: number;
+  activeIssues: number;
 };
