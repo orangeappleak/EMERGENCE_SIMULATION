@@ -736,10 +736,10 @@ function payFor(citizen: Citizen) {
   return 0;
 }
 
-function maybePayCompletedShift(sim: SimulationState, citizen: Citizen) {
+function maybePayCompletedShift(sim: SimulationState, citizen: Citizen, minute = sim.minute) {
   if (!citizen.workplaceId) return;
   if (sim.factoryClosed && citizen.workplaceId === "factory") return;
-  if (sim.minute < citizen.routine.workEndMinute) return;
+  if (minute < citizen.routine.workEndMinute) return;
 
   const key = `wage:${sim.day}:${citizen.workplaceId}`;
   if (citizen.lastTransactionAt[key] !== undefined) return;
@@ -1222,7 +1222,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
   sim.minute += minutesToAdvance;
 
   if (sim.minute >= 1440) {
-    for (const citizen of sim.citizens) maybePayCompletedShift(sim, citizen);
+    for (const citizen of sim.citizens) maybePayCompletedShift(sim, citizen, 1439);
     const endedDay = sim.day;
     sim.minute -= 1440;
     sim.day += 1;
