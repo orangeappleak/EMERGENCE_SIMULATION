@@ -23,6 +23,36 @@ export type PlaceSlot = {
   radius: number;
 };
 
+export type InteriorRoom = {
+  id: string;
+  name: string;
+  slotKinds: PlaceSlotKind[];
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+};
+
+export type InteriorFurnitureKind = "bed" | "table" | "chair" | "counter" | "desk" | "shelf" | "sofa" | "machine" | "board" | "plant";
+
+export type InteriorFurniture = {
+  id: string;
+  kind: InteriorFurnitureKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+};
+
+export type InteriorLayout = {
+  id: string;
+  name: string;
+  rooms: InteriorRoom[];
+  furniture: InteriorFurniture[];
+};
+
 export type Relationship = {
   friendship: number;
   trust: number;

@@ -1,4 +1,4 @@
-import type { Building, PlaceSlot, PlaceSlotKind } from "../types/simulation";
+import type { Building, InteriorLayout, PlaceSlot, PlaceSlotKind } from "../types/simulation";
 
 export const FACTORY_RUMOR = "factory_layoffs_may_happen";
 
@@ -70,3 +70,101 @@ export const PLACE_SLOTS: PlaceSlot[] = BUILDINGS.flatMap((building) => (
     radius: slot.radius,
   }))
 ));
+
+export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
+  home: {
+    id: "home_interior",
+    name: "Home interior",
+    rooms: [
+      { id: "living", name: "Living room", slotKinds: ["living"], x: 8, y: 42, width: 42, height: 32, color: "#d9b08a" },
+      { id: "kitchen", name: "Kitchen", slotKinds: ["kitchen"], x: 8, y: 8, width: 42, height: 30, color: "#bfd1b5" },
+      { id: "bedroom", name: "Bedroom", slotKinds: ["bedroom"], x: 54, y: 8, width: 38, height: 36, color: "#c9b6d8" },
+      { id: "yard", name: "Front yard", slotKinds: ["yard", "entry"], x: 54, y: 48, width: 38, height: 26, color: "#b8caad" },
+    ],
+    furniture: [
+      { id: "home_sofa", kind: "sofa", x: 16, y: 56, width: 20, height: 8, color: "#b54c4c" },
+      { id: "home_table", kind: "table", x: 34, y: 52, width: 10, height: 12, color: "#8c5a3a" },
+      { id: "home_counter", kind: "counter", x: 12, y: 14, width: 28, height: 7, color: "#e7e2cf" },
+      { id: "home_bed", kind: "bed", x: 62, y: 18, width: 20, height: 13, color: "#ce4f4f" },
+      { id: "home_plant", kind: "plant", x: 76, y: 57, width: 8, height: 8, color: "#3f8a4f" },
+    ],
+  },
+  factory: {
+    id: "factory_interior",
+    name: "Factory interior",
+    rooms: [
+      { id: "floor", name: "Factory floor", slotKinds: ["work"], x: 8, y: 18, width: 52, height: 56, color: "#8b969f" },
+      { id: "break", name: "Break area", slotKinds: ["break"], x: 64, y: 18, width: 28, height: 26, color: "#c7baa0" },
+      { id: "loading", name: "Loading entrance", slotKinds: ["entry"], x: 64, y: 48, width: 28, height: 26, color: "#9aa4a8" },
+    ],
+    furniture: [
+      { id: "factory_machine_1", kind: "machine", x: 16, y: 30, width: 16, height: 13, color: "#53606a" },
+      { id: "factory_machine_2", kind: "machine", x: 38, y: 48, width: 16, height: 13, color: "#53606a" },
+      { id: "factory_table", kind: "table", x: 70, y: 27, width: 14, height: 8, color: "#8c5a3a" },
+      { id: "factory_shelf", kind: "shelf", x: 70, y: 56, width: 16, height: 10, color: "#6f5f4c" },
+    ],
+  },
+  market: {
+    id: "market_interior",
+    name: "Market interior",
+    rooms: [
+      { id: "counter", name: "Front counter", slotKinds: ["counter"], x: 8, y: 48, width: 84, height: 26, color: "#d6bd8c" },
+      { id: "aisle", name: "Shop aisle", slotKinds: ["aisle"], x: 8, y: 8, width: 56, height: 36, color: "#c7d2bc" },
+      { id: "entry", name: "Market entrance", slotKinds: ["entry"], x: 68, y: 8, width: 24, height: 36, color: "#b9c9d0" },
+    ],
+    furniture: [
+      { id: "market_counter", kind: "counter", x: 14, y: 58, width: 36, height: 8, color: "#9b5647" },
+      { id: "market_shelf_1", kind: "shelf", x: 16, y: 17, width: 40, height: 6, color: "#63784e" },
+      { id: "market_shelf_2", kind: "shelf", x: 16, y: 31, width: 40, height: 6, color: "#63784e" },
+      { id: "market_plant", kind: "plant", x: 76, y: 20, width: 8, height: 8, color: "#3f8a4f" },
+    ],
+  },
+  office: {
+    id: "office_interior",
+    name: "Office interior",
+    rooms: [
+      { id: "desk", name: "Desk area", slotKinds: ["work"], x: 8, y: 8, width: 56, height: 66, color: "#c7d2df" },
+      { id: "coffee", name: "Coffee corner", slotKinds: ["break"], x: 68, y: 8, width: 24, height: 28, color: "#d6c2a5" },
+      { id: "lobby", name: "Office lobby", slotKinds: ["entry"], x: 68, y: 40, width: 24, height: 34, color: "#ccd6d2" },
+    ],
+    furniture: [
+      { id: "office_desk_1", kind: "desk", x: 16, y: 18, width: 16, height: 10, color: "#7d92ac" },
+      { id: "office_desk_2", kind: "desk", x: 40, y: 18, width: 16, height: 10, color: "#7d92ac" },
+      { id: "office_desk_3", kind: "desk", x: 16, y: 48, width: 16, height: 10, color: "#7d92ac" },
+      { id: "office_counter", kind: "counter", x: 73, y: 17, width: 12, height: 8, color: "#87604b" },
+      { id: "office_plant", kind: "plant", x: 76, y: 52, width: 8, height: 8, color: "#3f8a4f" },
+    ],
+  },
+  clinic: {
+    id: "clinic_interior",
+    name: "Clinic interior",
+    rooms: [
+      { id: "waiting", name: "Waiting room", slotKinds: ["waiting", "entry"], x: 8, y: 42, width: 84, height: 32, color: "#d6e0da" },
+      { id: "exam", name: "Exam room", slotKinds: ["exam"], x: 8, y: 8, width: 84, height: 30, color: "#d8eef0" },
+    ],
+    furniture: [
+      { id: "clinic_bed", kind: "bed", x: 18, y: 18, width: 24, height: 10, color: "#e7e2cf" },
+      { id: "clinic_desk", kind: "desk", x: 58, y: 18, width: 16, height: 10, color: "#7d92ac" },
+      { id: "clinic_chair_1", kind: "chair", x: 20, y: 55, width: 8, height: 8, color: "#8c5a3a" },
+      { id: "clinic_chair_2", kind: "chair", x: 34, y: 55, width: 8, height: 8, color: "#8c5a3a" },
+      { id: "clinic_plant", kind: "plant", x: 76, y: 54, width: 8, height: 8, color: "#3f8a4f" },
+    ],
+  },
+  school: {
+    id: "school_interior",
+    name: "School interior",
+    rooms: [
+      { id: "classroom", name: "Classroom", slotKinds: ["classroom"], x: 8, y: 8, width: 46, height: 42, color: "#d8c69f" },
+      { id: "hallway", name: "Hallway", slotKinds: ["hallway"], x: 8, y: 54, width: 84, height: 20, color: "#e0d6bc" },
+      { id: "office", name: "School office", slotKinds: ["office"], x: 58, y: 8, width: 34, height: 42, color: "#c6d6dd" },
+      { id: "yard", name: "School yard", slotKinds: ["yard", "entry"], x: 58, y: 54, width: 34, height: 20, color: "#b7caa8" },
+    ],
+    furniture: [
+      { id: "school_board", kind: "board", x: 14, y: 14, width: 34, height: 6, color: "#3f7656" },
+      { id: "school_desk_1", kind: "desk", x: 16, y: 28, width: 10, height: 8, color: "#8c5a3a" },
+      { id: "school_desk_2", kind: "desk", x: 34, y: 28, width: 10, height: 8, color: "#8c5a3a" },
+      { id: "school_office_desk", kind: "desk", x: 66, y: 24, width: 16, height: 10, color: "#7d92ac" },
+      { id: "school_plant", kind: "plant", x: 74, y: 60, width: 8, height: 8, color: "#3f8a4f" },
+    ],
+  },
+};

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ConversationsBrowser } from "./components/ConversationsBrowser";
+import { BuildingInterior } from "./components/BuildingInterior";
 import { CitizenProfile } from "./components/CitizenProfile";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { MetricsBar } from "./components/MetricsBar";
@@ -14,6 +15,7 @@ export default function App() {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [conversationsOpen, setConversationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
   useEffect(() => {
     let frameId = 0;
@@ -44,7 +46,7 @@ export default function App() {
 
       <MetricsBar summary={simulation.summary} />
 
-      <section className="workbench">
+      <section className={`workbench${profileOpen ? " has-profile" : ""}`}>
         <div className="map-toolbar" aria-label="Town view tools">
           <button
             type="button"
@@ -79,6 +81,11 @@ export default function App() {
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
           </button>
+          {selectedBuildingId ? (
+            <button type="button" onClick={() => setSelectedBuildingId(null)}>
+              Hide Building
+            </button>
+          ) : null}
         </div>
 
         {controlsOpen ? (
@@ -89,6 +96,7 @@ export default function App() {
               onSetSpeed={simulation.setSpeed}
               onSeedRumor={simulation.seedRumor}
               onCollapseFactory={simulation.collapseFactory}
+              onClose={() => setControlsOpen(false)}
             />
           </div>
         ) : null}
@@ -102,6 +110,7 @@ export default function App() {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
               }}
+              onClose={() => setPeopleOpen(false)}
             />
           </div>
         ) : null}
@@ -114,6 +123,7 @@ export default function App() {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
               }}
+              onClose={() => setConversationsOpen(false)}
             />
           </div>
         ) : null}
@@ -126,7 +136,27 @@ export default function App() {
             simulation.setSelectedCitizenId(citizenId);
             setProfileOpen(true);
           }}
+          onSelectBuilding={(buildingId) => {
+            setSelectedBuildingId(buildingId);
+            setControlsOpen(false);
+            setPeopleOpen(false);
+            setConversationsOpen(false);
+          }}
         />
+
+        {selectedBuildingId ? (
+          <div className="drawer drawer-center interior-drawer">
+            <BuildingInterior
+              buildingId={selectedBuildingId}
+              sim={simulation.sim}
+              onClose={() => setSelectedBuildingId(null)}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
 
         {profileOpen ? (
           <div className="drawer drawer-right">
@@ -137,6 +167,7 @@ export default function App() {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
               }}
+              onClose={() => setProfileOpen(false)}
             />
           </div>
         ) : null}

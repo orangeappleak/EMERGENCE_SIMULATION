@@ -190,6 +190,26 @@ function drawStaticWorld(stage: PIXI.Container, textures: Record<string, PIXI.Te
   stage.addChild(slotLayer);
 }
 
+function addBuildingHitAreas(stage: PIXI.Container, onSelectBuilding: (id: string) => void, isDraggingCamera: () => boolean) {
+  const hitLayer = new PIXI.Container();
+  hitLayer.eventMode = "passive";
+  hitLayer.zIndex = 5000;
+
+  for (const building of BUILDINGS) {
+    const hit = new PIXI.Graphics();
+    hit.rect(building.x, building.y, building.width, building.height).fill({ color: 0xffffff, alpha: 0.001 });
+    hit.eventMode = "static";
+    hit.hitArea = new PIXI.Rectangle(building.x, building.y, building.width, building.height);
+    hit.cursor = "pointer";
+    hit.on("pointerup", () => {
+      if (!isDraggingCamera()) onSelectBuilding(building.id);
+    });
+    hitLayer.addChild(hit);
+  }
+
+  stage.addChild(hitLayer);
+}
+
 function timeLight(minute: number) {
   const hour = minute / 60;
   if (hour < 5.2) return { color: 0x10213d, alpha: 0.48 };
@@ -407,7 +427,11 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   if (Math.abs(dx) > 2) view.sprite.scale.x = dx < 0 ? -1.6 : 1.6;
 }
 
-export async function createPixiWorld(host: HTMLElement, onSelectCitizen: (id: string) => void): Promise<PixiWorld> {
+export async function createPixiWorld(
+  host: HTMLElement,
+  onSelectCitizen: (id: string) => void,
+  onSelectBuilding: (id: string) => void
+): Promise<PixiWorld> {
   const app = new PIXI.Application();
   await app.init({
     width: Math.max(320, Math.floor(host.clientWidth)),
@@ -443,6 +467,7 @@ export async function createPixiWorld(host: HTMLElement, onSelectCitizen: (id: s
   app.stage.addChild(atmosphereLayer);
   drawStaticWorld(staticLayer, textures);
   const cameraControls = attachCameraControls(app, viewport);
+  addBuildingHitAreas(staticLayer, onSelectBuilding, cameraControls.isDragging);
   const stopResize = fitRendererToHost(app, host, viewport);
   clampCamera(viewport, app);
 
