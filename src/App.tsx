@@ -22,7 +22,9 @@ export default function App() {
   const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showRoutes, setShowRoutes] = useState(false);
+  const [showSelectedRoute, setShowSelectedRoute] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+  const routeOverlay = showRoutes ? "all" : showSelectedRoute ? "selected" : "none";
 
   useEffect(() => {
     let frameId = 0;
@@ -145,7 +147,10 @@ export default function App() {
           <button
             className={showRoutes ? "active" : ""}
             type="button"
-            onClick={() => setShowRoutes((open) => !open)}
+            onClick={() => {
+              setShowRoutes((open) => !open);
+              setShowSelectedRoute(false);
+            }}
           >
             Paths
           </button>
@@ -239,7 +244,7 @@ export default function App() {
           sim={simulation.sim}
           selectedCitizenId={simulation.selectedCitizenId}
           followSelected={profileOpen}
-          showRoutes={showRoutes}
+          routeOverlay={routeOverlay}
           onSelectCitizen={(citizenId) => {
             simulation.setSelectedCitizenId(citizenId);
             setProfileOpen(true);
@@ -274,6 +279,11 @@ export default function App() {
             <CitizenProfile
               citizen={simulation.selectedCitizen}
               sim={simulation.sim}
+              showRoute={showSelectedRoute}
+              onToggleRoute={() => {
+                setShowRoutes(false);
+                setShowSelectedRoute((open) => !open);
+              }}
               onSelectCitizen={(citizenId) => {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);

@@ -1451,6 +1451,25 @@ h3 {
   margin-top: 5px;
 }
 
+.route-toggle {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  min-height: 38px;
+  width: 100%;
+}
+
+.route-toggle.active {
+  background: #2f6fb0;
+  border-color: #2f6fb0;
+  color: #ffffff;
+}
+
+.route-toggle span {
+  font-size: 12px;
+  opacity: 0.78;
+}
+
 .thought-card {
   background: #f6f7f7;
   border: 1px solid #dbe1e4;

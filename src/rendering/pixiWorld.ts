@@ -23,6 +23,7 @@ type CitizenSprite = {
 };
 
 type CitizenDirection = "down" | "left" | "up" | "right";
+type RouteOverlayMode = "none" | "all" | "selected";
 
 type PixiWorld = {
   app: PIXI.Application;
@@ -32,7 +33,7 @@ type PixiWorld = {
   atmosphereLayer: PIXI.Container;
   citizenSprites: Map<string, CitizenSprite>;
   isDraggingCamera: () => boolean;
-  update: (sim: SimulationState, selectedCitizenId: string, followSelected: boolean, showRoutes: boolean) => void;
+  update: (sim: SimulationState, selectedCitizenId: string, followSelected: boolean, routeOverlay: RouteOverlayMode) => void;
   destroy: () => void;
 };
 
@@ -495,12 +496,13 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   view.lastY = citizen.y;
 }
 
-function drawCitizenRoutes(layer: PIXI.Container, sim: SimulationState, selectedCitizenId: string, showRoutes: boolean) {
+function drawCitizenRoutes(layer: PIXI.Container, sim: SimulationState, selectedCitizenId: string, routeOverlay: RouteOverlayMode) {
   layer.removeChildren();
-  if (!showRoutes) return;
+  if (routeOverlay === "none") return;
 
   const routes = new PIXI.Graphics();
   for (const citizen of sim.citizens) {
+    if (routeOverlay === "selected" && citizen.id !== selectedCitizenId) continue;
     if (citizen.route.length === 0) continue;
     const isSelected = citizen.id === selectedCitizenId;
     const color = isSelected ? 0xf7d35f : 0x2f6fb0;
@@ -574,8 +576,8 @@ export async function createPixiWorld(
     atmosphereLayer,
     citizenSprites,
     isDraggingCamera: cameraControls.isDragging,
-    update(sim, selectedCitizenId, followSelected, showRoutes) {
-      drawCitizenRoutes(routeLayer, sim, selectedCitizenId, showRoutes);
+    update(sim, selectedCitizenId, followSelected, routeOverlay) {
+      drawCitizenRoutes(routeLayer, sim, selectedCitizenId, routeOverlay);
       for (const citizen of sim.citizens) {
         let view = citizenSprites.get(citizen.id);
         if (!view) {

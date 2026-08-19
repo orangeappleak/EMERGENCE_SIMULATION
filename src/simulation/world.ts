@@ -1470,32 +1470,45 @@ function updateSchedule(sim: SimulationState, citizen: Citizen) {
 }
 
 function moveCitizen(citizen: Citizen, simMinutes: number) {
-  const waypoint = citizen.route[0] ?? { x: citizen.targetX, y: citizen.targetY };
-  const dx = waypoint.x - citizen.x;
-  const dy = waypoint.y - citizen.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance < 1) {
-    if (citizen.route.length > 0) {
-      citizen.route.shift();
-      if (citizen.route.length === 0) {
-        citizen.currentSlotId = citizen.destinationSlotId;
+  let remainingStep = simMinutes * WALK_PIXELS_PER_SIM_MINUTE * citizen.routine.walkingSpeed;
+
+  while (remainingStep > 0.01) {
+    const waypoint = citizen.route[0] ?? { x: citizen.targetX, y: citizen.targetY };
+    const dx = waypoint.x - citizen.x;
+    const dy = waypoint.y - citizen.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < 1) {
+      citizen.x = waypoint.x;
+      citizen.y = waypoint.y;
+      if (citizen.route.length > 0) {
+        citizen.route.shift();
+        if (citizen.route.length === 0) {
+          citizen.currentSlotId = citizen.destinationSlotId;
+        }
+        continue;
       }
-    }
-    return;
-  }
-  const step = Math.min(distance, simMinutes * WALK_PIXELS_PER_SIM_MINUTE * citizen.routine.walkingSpeed);
-  citizen.x += (dx / distance) * step;
-  citizen.y += (dy / distance) * step;
-  if (distance <= step + 1) {
-    citizen.x = waypoint.x;
-    citizen.y = waypoint.y;
-    if (citizen.route.length > 0) {
-      citizen.route.shift();
-      if (citizen.route.length === 0) {
-        citizen.currentSlotId = citizen.destinationSlotId;
-      }
-    } else {
       citizen.currentSlotId = citizen.destinationSlotId;
+      break;
+    }
+
+    const step = Math.min(distance, remainingStep);
+    citizen.x += (dx / distance) * step;
+    citizen.y += (dy / distance) * step;
+    remainingStep -= step;
+
+    if (distance <= step + 1) {
+      citizen.x = waypoint.x;
+      citizen.y = waypoint.y;
+      if (citizen.route.length > 0) {
+        citizen.route.shift();
+        if (citizen.route.length === 0) {
+          citizen.currentSlotId = citizen.destinationSlotId;
+        }
+      } else {
+        citizen.currentSlotId = citizen.destinationSlotId;
+        break;
+      }
     }
   }
 }

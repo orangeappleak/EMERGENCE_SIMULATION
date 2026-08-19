@@ -7,6 +7,8 @@ import { buildingById, placeSlotById } from "../simulation/world";
 type CitizenProfileProps = {
   citizen: Citizen;
   sim: SimulationState;
+  showRoute: boolean;
+  onToggleRoute: () => void;
   onSelectCitizen: (citizenId: string) => void;
   onClose: () => void;
 };
@@ -64,7 +66,7 @@ function distanceBetween(a: Citizen, b: Citizen) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: CitizenProfileProps) {
+export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelectCitizen, onClose }: CitizenProfileProps) {
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const workplace = citizen.workplaceId ? buildingById(citizen.workplaceId) : null;
@@ -147,6 +149,11 @@ export function CitizenProfile({ citizen, sim, onSelectCitizen, onClose }: Citiz
         <span>{distanceToTarget < 18 ? "At" : "Going to"} {buildingById(citizen.destinationId).name}</span>
         <strong>{distanceToTarget < 18 ? currentSlot.name : destinationSlot.name}</strong>
       </div>
+
+      <button className={`route-toggle${showRoute ? " active" : ""}`} type="button" onClick={onToggleRoute}>
+        {showRoute ? "Hide this path" : "Show this path"}
+        <span>{citizen.route.length} stops</span>
+      </button>
 
       <div className="routine-line">
         <span>{citizen.institutionRole ?? citizen.lifeStage}</span>
