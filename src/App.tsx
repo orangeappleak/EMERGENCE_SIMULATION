@@ -21,7 +21,10 @@ export default function App() {
   const [worldDecisionsOpen, setWorldDecisionsOpen] = useState(false);
   const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showRoutes, setShowRoutes] = useState(false);
+  const [showSelectedRoute, setShowSelectedRoute] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+  const routeOverlay = showRoutes ? "all" : showSelectedRoute ? "selected" : "none";
 
   useEffect(() => {
     let frameId = 0;
@@ -141,6 +144,16 @@ export default function App() {
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
           </button>
+          <button
+            className={showRoutes ? "active" : ""}
+            type="button"
+            onClick={() => {
+              setShowRoutes((open) => !open);
+              setShowSelectedRoute(false);
+            }}
+          >
+            Paths
+          </button>
           {selectedBuildingId ? (
             <button type="button" onClick={() => setSelectedBuildingId(null)}>
               Hide Building
@@ -231,6 +244,7 @@ export default function App() {
           sim={simulation.sim}
           selectedCitizenId={simulation.selectedCitizenId}
           followSelected={profileOpen}
+          routeOverlay={routeOverlay}
           onSelectCitizen={(citizenId) => {
             simulation.setSelectedCitizenId(citizenId);
             setProfileOpen(true);
@@ -265,6 +279,11 @@ export default function App() {
             <CitizenProfile
               citizen={simulation.selectedCitizen}
               sim={simulation.sim}
+              showRoute={showSelectedRoute}
+              onToggleRoute={() => {
+                setShowRoutes(false);
+                setShowSelectedRoute((open) => !open);
+              }}
               onSelectCitizen={(citizenId) => {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);
