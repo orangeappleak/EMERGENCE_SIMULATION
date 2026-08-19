@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -628,6 +628,16 @@ function upsertCivicIssue(
   });
 }
 
+function hasCivicMaturity(citizen: Citizen) {
+  return citizen.lifeStage === "teen" || citizen.lifeStage === "adult" || citizen.lifeStage === "elder";
+}
+
+function conversationHasCivicMaturity(sim: SimulationState, entry: ConversationEntry) {
+  const speaker = entry.speakerId ? sim.citizens.find((citizen) => citizen.id === entry.speakerId) : null;
+  const listener = sim.citizens.find((citizen) => citizen.id === entry.withId);
+  return Boolean((speaker && hasCivicMaturity(speaker)) || (listener && hasCivicMaturity(listener)));
+}
+
 function detectCivicIssues(sim: SimulationState) {
   const strainedHouseholds = sim.households.filter((household) => household.financialStatus !== "stable");
   const unpaidBills = sim.households.reduce((sum, household) => sum + household.unpaidBills, 0);
@@ -637,7 +647,11 @@ function detectCivicIssues(sim: SimulationState) {
   const unemployed = sim.citizens.filter((citizen) => !citizen.workplaceId && !citizen.schoolClass && citizen.lifeStage !== "child" && citizen.lifeStage !== "elder");
   const lowFoodHouseholds = sim.households.filter((household) => household.foodStock < 35);
   const schoolTrouble = sim.citizens.filter((citizen) => citizen.schoolProgress && (citizen.schoolProgress.attendance < 55 || citizen.schoolProgress.grades < 45));
-  const seriousTownTalk = sim.conversationLog.filter((entry) => entry.day === sim.day && (entry.classification === "serious" || entry.classification === "planning")).length;
+  const seriousTownTalk = sim.conversationLog.filter((entry) => (
+    entry.day === sim.day
+    && (entry.classification === "serious" || entry.classification === "planning")
+    && conversationHasCivicMaturity(sim, entry)
+  )).length;
 
   if (strainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) {
     const affected = strainedHouseholds.flatMap((household) => household.memberIds);
@@ -720,6 +734,7 @@ function detectCivicIssues(sim: SimulationState) {
       severity: clamp(seriousTownTalk * 4 + sim.civicIssues.length * 10, 22, 100),
       awareness: clamp(seriousTownTalk * 5 + sim.civicIssues.length * 8, 10, 100),
       affectedCitizenIds: sim.citizens
+        .filter((citizen) => hasCivicMaturity(citizen))
         .filter((citizen) => citizen.personality.responsibility > 55 || citizen.personality.sociability > 60)
         .map((citizen) => citizen.id),
       evidence: [
@@ -1060,6 +1075,13 @@ function maybePayCompletedShift(sim: SimulationState, citizen: Citizen, minute =
 
 function maybeApplyPlaceTransaction(sim: SimulationState, citizen: Citizen) {
   if (!isAtDestination(citizen)) return;
+
+  if (citizen.lifeStage === "child" && (citizen.destinationId === "market" || citizen.destinationId === "clinic")) {
+    citizen.currentThought = citizen.destinationId === "clinic"
+      ? "I need an adult to help me with the clinic."
+      : "I should not be shopping by myself.";
+    return;
+  }
 
   if (citizen.destinationId === "market" && (citizen.currentIntention === "eat" || citizen.currentIntention === "errand")) {
     const key = transactionKey("market", "market");

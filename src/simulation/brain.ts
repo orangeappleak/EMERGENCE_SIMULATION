@@ -31,6 +31,18 @@ function placeSlotById(id: string) {
   return PLACE_SLOTS.find((item) => item.id === id);
 }
 
+function isYoungChild(citizen: Citizen) {
+  return citizen.age < 7;
+}
+
+function isChild(citizen: Citizen) {
+  return citizen.lifeStage === "child";
+}
+
+function canRunIndependentErrands(citizen: Citizen) {
+  return citizen.lifeStage !== "child";
+}
+
 function personalMoneyPressure(citizen: Citizen) {
   if (citizen.lifeStage === "child") return 0;
   if (citizen.schoolClass && !citizen.workplaceId) return citizen.cash < 45 ? 18 : 0;
@@ -451,6 +463,19 @@ export function thoughtFor(citizen: Citizen, intention: CitizenIntention, destin
   const household = sim?.households.find((item) => item.id === citizen.householdId);
   const moneyPressure = personalMoneyPressure(citizen) + householdMoneyPressure(household);
   if (intention === "sleep") return "I need sleep more than anything right now.";
+  if (isYoungChild(citizen)) {
+    if (intention === "school") return "I should stay with my class and teacher.";
+    if (intention === "eat") return "I am hungry. I need someone at home to help me.";
+    if (intention === "recover") return "I do not feel good. I need an adult to help me.";
+    if (intention === "socialize") return "I want to be near someone I know.";
+    if (intention === "wander") return "I want to play somewhere close and familiar.";
+    return "I want to be somewhere familiar.";
+  }
+  if (isChild(citizen)) {
+    if (intention === "eat") return "I am hungry, but I should get food through home or school.";
+    if (intention === "recover") return "I should tell an adult I do not feel right.";
+    if (intention === "errand") return "I should not handle errands alone yet.";
+  }
   if (intention === "school") return citizen.institutionRole === "student" ? "I should get to class before I fall behind." : "The students need me at school today.";
   if (intention === "work") return moneyPressure > 0 ? "I should show up today. The money matters right now." : "I should show up and keep money coming in.";
   if (intention === "eat") return moneyPressure > 0 ? "I am hungry, but I need to watch what I spend." : "I am hungry enough to go find food.";
@@ -495,25 +520,31 @@ export function chooseCitizenDecision(sim: SimulationState, citizen: Citizen, ra
   }
 
   if (lunchTime || needs.hunger > 58) {
-    scores.push({ intention: "eat", destinationId: "market", score: 28 + needs.hunger * 0.95 + (lunchTime ? 34 : 0) - moneyPressure * 0.18 });
+    scores.push({
+      intention: "eat",
+      destinationId: isChild(citizen) ? citizen.homeId : "market",
+      score: 28 + needs.hunger * 0.95 + (lunchTime ? 34 : 0) - moneyPressure * 0.18,
+    });
   }
 
   if (!sleepTime) {
     scores.push({
       intention: "socialize",
-      destinationId: pick(rand, SOCIAL_DESTINATIONS),
+      destinationId: isChild(citizen) ? pick(rand, [citizen.homeId, "school"]) : pick(rand, SOCIAL_DESTINATIONS),
       score: 14 + needs.belonging * 0.55 + personality.sociability * 0.42 + goalPressure(citizen, "friendship") - needs.rest * 0.18,
     });
     scores.push({
       intention: "wander",
-      destinationId: pick(rand, ["market", "clinic", "school", citizen.homeId]),
-      score: 9 + needs.fun * 0.42 + personality.curiosity * 0.36 + personality.independence * 0.18 + goalPressure(citizen, "curiosity"),
+      destinationId: isChild(citizen) ? pick(rand, [citizen.homeId, "school"]) : pick(rand, ["market", "clinic", "school", citizen.homeId]),
+      score: 9 + needs.fun * 0.42 + personality.curiosity * 0.36 + (isChild(citizen) ? 0 : personality.independence * 0.18) + goalPressure(citizen, "curiosity"),
     });
-    scores.push({
-      intention: "errand",
-      destinationId: pick(rand, ["market", "clinic"]),
-      score: 12 + citizen.routine.errandChance * 42 + needs.hunger * 0.18 + (household?.foodStock && household.foodStock < 35 ? 30 : 0) - moneyPressure * 0.22,
-    });
+    if (canRunIndependentErrands(citizen)) {
+      scores.push({
+        intention: "errand",
+        destinationId: pick(rand, ["market", "clinic"]),
+        score: 12 + citizen.routine.errandChance * 42 + needs.hunger * 0.18 + (household?.foodStock && household.foodStock < 35 ? 30 : 0) - moneyPressure * 0.22,
+      });
+    }
   }
 
   if (needs.rest > 62 || citizen.mood < 38) {
@@ -575,6 +606,14 @@ export function chooseCitizenDecision(sim: SimulationState, citizen: Citizen, ra
 }
 
 export function chooseConversationTopic(sim: SimulationState, a: Citizen, b: Citizen, rand: () => number): ConversationTopic {
+  if (isYoungChild(a) || isYoungChild(b)) {
+    const childOptions: ConversationTopic[] = ["daily life"];
+    if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") childOptions.push("family");
+    if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") childOptions.push("school");
+    if (a.problems.length || b.problems.length) childOptions.push("personal problem");
+    return pick(rand, childOptions);
+  }
+
   const options: ConversationTopic[] = ["daily life", "future plans"];
   if (a.workplaceId && a.workplaceId === b.workplaceId) options.push("workplace gossip");
   if (a.problems.length || b.problems.length) options.push("personal problem");
