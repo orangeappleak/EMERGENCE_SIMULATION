@@ -38,6 +38,13 @@ function personalMoneyPressure(citizen: Citizen) {
   return citizen.cash < 360 ? 48 : citizen.cash < 500 ? 20 : 0;
 }
 
+function householdMoneyPressure(household?: Household) {
+  if (!household) return 0;
+  if (household.sharedCash < household.rent * 0.25) return 36;
+  if (household.sharedCash < household.rent * 0.5) return 18;
+  return 0;
+}
+
 function labelIntent(intention: CitizenIntention) {
   return intention.charAt(0).toUpperCase() + intention.slice(1);
 }
@@ -439,15 +446,20 @@ export function currentObligation(citizen: Citizen, minute: number, sim: Simulat
   return null;
 }
 
-export function thoughtFor(citizen: Citizen, intention: CitizenIntention, destinationId: string, obligation: CitizenIntention | null) {
+export function thoughtFor(citizen: Citizen, intention: CitizenIntention, destinationId: string, obligation: CitizenIntention | null, sim?: SimulationState) {
   const destination = buildingById(destinationId).name;
+  const household = sim?.households.find((item) => item.id === citizen.householdId);
+  const moneyPressure = personalMoneyPressure(citizen) + householdMoneyPressure(household);
   if (intention === "sleep") return "I need sleep more than anything right now.";
   if (intention === "school") return citizen.institutionRole === "student" ? "I should get to class before I fall behind." : "The students need me at school today.";
-  if (intention === "work") return "I should show up and keep money coming in.";
-  if (intention === "eat") return "I am hungry enough to go find food.";
+  if (intention === "work") return moneyPressure > 0 ? "I should show up today. The money matters right now." : "I should show up and keep money coming in.";
+  if (intention === "eat") return moneyPressure > 0 ? "I am hungry, but I need to watch what I spend." : "I am hungry enough to go find food.";
   if (intention === "socialize") return `I want to be around people at ${destination}.`;
-  if (intention === "errand") return `I can take care of something at ${destination}.`;
-  if (intention === "recover") return obligation ? "I know I should go in, but I am too drained today." : "I need a quieter day to recover.";
+  if (intention === "errand") return moneyPressure > 0 ? `I can take care of something at ${destination}, but only if it is worth the cost.` : `I can take care of something at ${destination}.`;
+  if (intention === "recover") {
+    if (moneyPressure > 0 && destinationId === "clinic") return "I need help, but clinic costs are on my mind.";
+    return obligation ? "I know I should go in, but I am too drained today." : "I need a quieter day to recover.";
+  }
   if (intention === "wander") return `I feel like seeing what is happening near ${destination}.`;
   return citizen.goalFocus ? `I want to be home for a while. I keep thinking about: ${citizen.goalFocus}.` : "I want to be home for a while.";
 }
@@ -460,6 +472,7 @@ export function chooseCitizenDecision(sim: SimulationState, citizen: Citizen, ra
   const lunchTime = minute >= citizen.routine.lunchMinute && minute < citizen.routine.lunchMinute + 55;
   const personality = citizen.personality;
   const needs = citizen.needs;
+  const moneyPressure = personalMoneyPressure(citizen) + householdMoneyPressure(household);
   const scores: Array<{ intention: CitizenIntention; destinationId: string; score: number }> = [];
 
   scores.push({ intention: "home", destinationId: citizen.homeId, score: 24 + needs.rest * 0.35 + (household?.stress ?? 0) * 0.08 });
@@ -477,12 +490,12 @@ export function chooseCitizenDecision(sim: SimulationState, citizen: Citizen, ra
     scores.push({
       intention: "work",
       destinationId: citizen.workplaceId,
-      score: 70 + personality.responsibility * 0.72 + personality.ambition * 0.32 + goalPressure(citizen, "career") + goalPressure(citizen, "money") - needs.rest * 0.55 - needs.fun * 0.12 - (household?.stress ?? 0) * 0.08,
+      score: 70 + moneyPressure * 0.42 + personality.responsibility * 0.72 + personality.ambition * 0.32 + goalPressure(citizen, "career") + goalPressure(citizen, "money") - needs.rest * 0.55 - needs.fun * 0.12 - (household?.stress ?? 0) * 0.08,
     });
   }
 
   if (lunchTime || needs.hunger > 58) {
-    scores.push({ intention: "eat", destinationId: "market", score: 28 + needs.hunger * 0.95 + (lunchTime ? 34 : 0) });
+    scores.push({ intention: "eat", destinationId: "market", score: 28 + needs.hunger * 0.95 + (lunchTime ? 34 : 0) - moneyPressure * 0.18 });
   }
 
   if (!sleepTime) {
@@ -499,7 +512,7 @@ export function chooseCitizenDecision(sim: SimulationState, citizen: Citizen, ra
     scores.push({
       intention: "errand",
       destinationId: pick(rand, ["market", "clinic"]),
-      score: 12 + citizen.routine.errandChance * 42 + needs.hunger * 0.18 + (household?.foodStock && household.foodStock < 35 ? 30 : 0),
+      score: 12 + citizen.routine.errandChance * 42 + needs.hunger * 0.18 + (household?.foodStock && household.foodStock < 35 ? 30 : 0) - moneyPressure * 0.22,
     });
   }
 

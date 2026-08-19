@@ -613,6 +613,11 @@ function spendAtBuilding(sim: SimulationState, citizen: Citizen, buildingId: str
   return paid;
 }
 
+function availableCashFor(sim: SimulationState, citizen: Citizen) {
+  const household = sim.households.find((item) => item.id === citizen.householdId);
+  return citizen.cash + (household?.sharedCash ?? 0);
+}
+
 function payPersonalCost(sim: SimulationState, citizen: Citizen, amount: number) {
   if (amount <= 0) return;
   const paid = Math.min(citizen.cash, amount);
@@ -640,6 +645,7 @@ function contributeToHousehold(sim: SimulationState, citizen: Citizen, amount: n
   const household = sim.households.find((item) => item.id === citizen.householdId);
   if (!household || amount <= 0) return;
   const contribution = Math.min(citizen.cash, amount);
+  if (contribution <= 0) return;
   citizen.cash -= contribution;
   household.sharedCash += contribution;
   addTransaction(sim, {
@@ -730,6 +736,28 @@ function payFor(citizen: Citizen) {
   return 0;
 }
 
+function maybePayCompletedShift(sim: SimulationState, citizen: Citizen) {
+  if (!citizen.workplaceId) return;
+  if (sim.factoryClosed && citizen.workplaceId === "factory") return;
+  if (sim.minute < citizen.routine.workEndMinute) return;
+
+  const key = `wage:${sim.day}:${citizen.workplaceId}`;
+  if (citizen.lastTransactionAt[key] !== undefined) return;
+  markTransaction(citizen, sim, key);
+
+  const expectedMinutes = Math.max(1, citizen.routine.workEndMinute - citizen.routine.workStartMinute);
+  const workRatio = clamp(citizen.today.workedMinutes / expectedMinutes, 0, 1);
+  if (workRatio < 0.15) {
+    citizen.currentThought = "I barely worked today, so there is no real paycheck coming.";
+    citizen.problems = Array.from(new Set([...citizen.problems, "Missed too much work to earn much."]));
+    return;
+  }
+
+  const earned = Math.round(payFor(citizen) * workRatio);
+  payCitizenWage(sim, citizen, earned);
+  contributeToHousehold(sim, citizen, Math.round(earned * 0.32));
+}
+
 function maybeApplyPlaceTransaction(sim: SimulationState, citizen: Citizen) {
   if (!isAtDestination(citizen)) return;
 
@@ -740,27 +768,34 @@ function maybeApplyPlaceTransaction(sim: SimulationState, citizen: Citizen) {
     const mealCost = citizen.lifeStage === "child" ? 4 : citizen.lifeStage === "teen" ? 7 : 12;
     const groceryCost = household && household.foodStock < 45 ? 28 : 0;
     const amount = mealCost + groceryCost;
+    const affordableRatio = amount > 0 ? clamp(availableCashFor(sim, citizen) / amount, 0, 1) : 1;
     const paid = spendAtBuilding(sim, citizen, "market", "market", amount, groceryCost ? "Bought food and household groceries." : "Bought something to eat.");
     if (paid > 0) {
-      citizen.needs.hunger = clamp(citizen.needs.hunger - 32, 0, 100);
-      citizen.needs.fun = clamp(citizen.needs.fun - 5, 0, 100);
-      citizen.mood = clamp(citizen.mood + 1.4, 0, 100);
-      if (household && groceryCost) household.foodStock = clamp(household.foodStock + 18, 0, 100);
-      addLifeJournal(sim, citizen, groceryCost ? "I spent money at the market and brought food back into the household." : "I bought food at the market.");
+      const benefit = clamp(paid / amount, 0.25, 1);
+      citizen.needs.hunger = clamp(citizen.needs.hunger - 32 * benefit, 0, 100);
+      citizen.needs.fun = clamp(citizen.needs.fun - 5 * benefit, 0, 100);
+      citizen.mood = clamp(citizen.mood + 1.4 * benefit, 0, 100);
+      if (household && groceryCost) household.foodStock = clamp(household.foodStock + 18 * benefit, 0, 100);
+      addLifeJournal(sim, citizen, paid < amount || affordableRatio < 1 ? "I bought what I could afford at the market." : groceryCost ? "I spent money at the market and brought food back into the household." : "I bought food at the market.");
+    } else {
+      citizen.currentThought = "I wanted food, but I do not have the money for it right now.";
     }
     markTransaction(citizen, sim, key);
   }
 
-  if (citizen.destinationId === "clinic" && citizen.currentIntention === "recover") {
+  if (citizen.destinationId === "clinic" && (citizen.currentIntention === "recover" || citizen.currentIntention === "errand")) {
     const key = transactionKey("clinic", "clinic");
     if (hasRecentTransaction(sim, citizen, key, 320)) return;
-    const amount = citizen.lifeStage === "child" ? 35 : citizen.lifeStage === "elder" ? 70 : 55;
-    const paid = spendAtBuilding(sim, citizen, "clinic", "clinic", amount, "Paid for care at the clinic.");
+    const amount = citizen.currentIntention === "errand" ? 18 : citizen.lifeStage === "child" ? 35 : citizen.lifeStage === "elder" ? 70 : 55;
+    const paid = spendAtBuilding(sim, citizen, "clinic", "clinic", amount, citizen.currentIntention === "errand" ? "Paid for a quick clinic errand." : "Paid for care at the clinic.");
     if (paid > 0) {
-      citizen.energy = clamp(citizen.energy + 12, 0, 100);
-      citizen.needs.rest = clamp(citizen.needs.rest - 18, 0, 100);
-      citizen.mood = clamp(citizen.mood + 1, 0, 100);
-      addLifeJournal(sim, citizen, "I paid for a clinic visit and felt a little steadier after.");
+      const benefit = clamp(paid / amount, 0.25, 1);
+      citizen.energy = clamp(citizen.energy + (citizen.currentIntention === "errand" ? 4 : 12) * benefit, 0, 100);
+      citizen.needs.rest = clamp(citizen.needs.rest - (citizen.currentIntention === "errand" ? 4 : 18) * benefit, 0, 100);
+      citizen.mood = clamp(citizen.mood + 1 * benefit, 0, 100);
+      addLifeJournal(sim, citizen, paid < amount ? "I could only afford part of the clinic visit." : citizen.currentIntention === "errand" ? "I paid for a quick clinic errand." : "I paid for a clinic visit and felt a little steadier after.");
+    } else {
+      citizen.currentThought = "I need care, but I cannot afford the clinic right now.";
     }
     markTransaction(citizen, sim, key);
   }
@@ -863,7 +898,7 @@ function updateSchedule(sim: SimulationState, citizen: Citizen) {
   const decision = brainChooseCitizenDecision(sim, citizen, rand);
   citizen.currentIntention = decision.intention;
   citizen.decisionReasoning = decision.reasoning;
-  citizen.currentThought = brainThoughtFor(citizen, decision.intention, decision.destinationId, obligation);
+  citizen.currentThought = brainThoughtFor(citizen, decision.intention, decision.destinationId, obligation, sim);
   const commitmentMinutes = decision.intention === "work" || decision.intention === "school"
     ? 95
     : decision.intention === "eat" || decision.intention === "errand"
@@ -1187,14 +1222,12 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
   sim.minute += minutesToAdvance;
 
   if (sim.minute >= 1440) {
+    for (const citizen of sim.citizens) maybePayCompletedShift(sim, citizen);
     const endedDay = sim.day;
     sim.minute -= 1440;
     sim.day += 1;
     sim.weather = weatherForDay(sim.day);
     for (const citizen of sim.citizens) {
-      const earned = payFor(citizen);
-      payCitizenWage(sim, citizen, earned);
-      contributeToHousehold(sim, citizen, Math.round(earned * 0.32));
       payPersonalCost(sim, citizen, dailyPersonalCost(citizen));
       citizen.energy = clamp(citizen.energy + 22, 0, 100);
       citizen.social = clamp(citizen.social - 10, 0, 100);
@@ -1239,6 +1272,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     applyWeatherEffects(sim, citizen, minutesToAdvance);
     brainUpdateEmotionAndProblems(sim, citizen);
     updateDailyActivity(citizen, minutesToAdvance);
+    maybePayCompletedShift(sim, citizen);
     brainUpdateGoalProgress(sim, citizen, minutesToAdvance, addLifeJournal);
     moveCitizen(citizen, minutesToAdvance);
     maybeApplyPlaceTransaction(sim, citizen);
