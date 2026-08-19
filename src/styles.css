@@ -215,6 +215,18 @@ h3 {
   width: min(780px, calc(100vw - 48px));
 }
 
+.has-profile .interior-drawer {
+  left: 12px;
+  max-width: none;
+  right: min(372px, calc(100vw - 48px));
+  transform: none;
+}
+
+.has-profile .interior-drawer .panel {
+  margin: 0 auto;
+  width: min(780px, 100%);
+}
+
 .map-toolbar {
   align-items: center;
   display: flex;
@@ -1397,6 +1409,17 @@ h3 {
   .panel {
     max-height: none;
     min-height: auto;
+  }
+
+  .has-profile .interior-drawer {
+    left: 50%;
+    max-width: min(780px, calc(100vw - 48px));
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .has-profile .interior-drawer .panel {
+    width: min(780px, calc(100vw - 48px));
   }
 
   .drawer {

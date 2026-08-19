@@ -46,7 +46,7 @@ export default function App() {
 
       <MetricsBar summary={simulation.summary} />
 
-      <section className="workbench">
+      <section className={`workbench${profileOpen ? " has-profile" : ""}`}>
         <div className="map-toolbar" aria-label="Town view tools">
           <button
             type="button"
