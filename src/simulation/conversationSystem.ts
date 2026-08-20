@@ -1,4 +1,4 @@
-import type { Citizen, ConversationClassification, ConversationTopic, SimulationState } from "../types/simulation";
+import type { Citizen, ConversationClassification, ConversationImportance, ConversationTopic, SimulationState } from "../types/simulation";
 import {
   chooseConversationTopic as brainChooseConversationTopic,
   classifyConversation as brainClassifyConversation,
@@ -8,10 +8,33 @@ import {
 import { FACTORY_RUMOR } from "./constants";
 import { addFeed, addLifeJournal, addWorldDecision } from "./eventLog";
 import { buildingById, buildingContains, isAtDestination, placeSlotById } from "./movementSystem";
-import { clamp } from "./random";
+import { clamp, mulberry32 } from "./random";
 import { formatTime } from "./time";
 
 export type AddMemory = (sim: SimulationState, citizen: Citizen, text: string) => void;
+
+type ConversationContext = {
+  zone: "home" | "work" | "school" | "public" | "street";
+  multiplier: number;
+};
+
+type ConversationLocation = ReturnType<typeof conversationLocation>;
+
+type ConversationPlan = {
+  topic: ConversationTopic;
+  classification: ConversationClassification;
+  classificationReason: string;
+  aText: string;
+  bText: string;
+  location: ConversationLocation;
+  contextZone: ConversationContext["zone"];
+  evidenceSummary: string;
+  evidenceTags: string[];
+  importance: ConversationImportance;
+  relationshipDelta: number;
+  shouldLogWorldDecision: boolean;
+  shouldWriteMemory: boolean;
+};
 
 function effectiveSlot(citizen: Citizen) {
   return isAtDestination(citizen) ? placeSlotById(citizen.destinationSlotId) : placeSlotById(citizen.currentSlotId);
@@ -25,7 +48,7 @@ function conversationLocation(a: Citizen, b: Citizen) {
   };
 }
 
-function conversationContext(a: Citizen, b: Citizen): { zone: "home" | "work" | "school" | "public" | "street"; multiplier: number } | null {
+function conversationContext(a: Citizen, b: Citizen): ConversationContext | null {
   const distance = Math.hypot(a.x - b.x, a.y - b.y);
   if (distance > 44) return null;
 
@@ -61,7 +84,78 @@ function conversationContext(a: Citizen, b: Citizen): { zone: "home" | "work" | 
   return null;
 }
 
-function addConversationEntry(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, classification: ConversationClassification, classificationReason: string, text: string) {
+function citizenIndex(citizen: Citizen) {
+  return Number(citizen.id.split("_")[1]) || 0;
+}
+
+function conversationRand(sim: SimulationState, a: Citizen, b: Citizen, tick: number) {
+  const first = Math.min(citizenIndex(a), citizenIndex(b));
+  const second = Math.max(citizenIndex(a), citizenIndex(b));
+  const window = Math.floor(tick / 15);
+  return mulberry32(sim.day * 31000 + window * 97 + first * 131 + second * 197);
+}
+
+function conversationImportance(topic: ConversationTopic, classification: ConversationClassification, a: Citizen, b: Citizen): ConversationImportance {
+  if (classification === "secretive") return "high";
+  if (topic === "money stress" || topic === "personal problem") return "high";
+  if (classification === "planning" && (a.goalFocus || b.goalFocus)) return "high";
+  if (classification === "serious" || classification === "planning" || a.problems.length || b.problems.length) return "medium";
+  return "low";
+}
+
+function evidenceTags(topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen, location: ConversationLocation) {
+  const tags = new Set<string>([topic, classification, context.zone, location.building.kind]);
+  if (a.householdId === b.householdId) tags.add("same household");
+  if (a.workplaceId && a.workplaceId === b.workplaceId) tags.add("same workplace");
+  if (a.lifeStage === "child" || b.lifeStage === "child") tags.add("child present");
+  if (a.problems.length || b.problems.length) tags.add("active problem");
+  if (topic === "money stress") tags.add("economy");
+  if (topic === "school") tags.add("education");
+  if (topic === "workplace gossip") tags.add("employment");
+  if (topic === "family") tags.add("household");
+  return Array.from(tags);
+}
+
+function evidenceSummary(topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen) {
+  if (topic === "money stress") return `${a.name} and ${b.name} surfaced money pressure during a ${context.zone} conversation.`;
+  if (topic === "personal problem") return `${a.name} and ${b.name} shared a personal pressure that may matter later.`;
+  if (topic === "future plans") return `${a.name} and ${b.name} compared future goals and possible next steps.`;
+  if (topic === "workplace gossip") return `${a.name} and ${b.name} talked about workplace pressure.`;
+  if (topic === "school") return `${a.name} and ${b.name} talked about school responsibilities.`;
+  if (topic === "family") return `${a.name} and ${b.name} talked about household stability.`;
+  if (classification === "secretive") return `${a.name} and ${b.name} exchanged information that may spread through trust.`;
+  return `${a.name} and ${b.name} maintained an ordinary social tie.`;
+}
+
+function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, rand: () => number): ConversationPlan {
+  const topic = brainChooseConversationTopic(sim, a, b, rand);
+  const aText = brainConversationText(sim, a, b, topic, rand);
+  const bText = brainConversationText(sim, b, a, topic, rand);
+  const { classification, reason: classificationReason } = brainClassifyConversation(topic, a, b);
+  const location = conversationLocation(a, b);
+  const importance = conversationImportance(topic, classification, a, b);
+  const tags = evidenceTags(topic, classification, context, a, b, location);
+  const relationshipDelta = topic === "personal problem" || topic === "future plans" ? 4 : topic === "rumor" || topic === "people gossip" ? 3 : 2;
+
+  return {
+    topic,
+    classification,
+    classificationReason,
+    aText,
+    bText,
+    location,
+    contextZone: context.zone,
+    evidenceSummary: evidenceSummary(topic, classification, context, a, b),
+    evidenceTags: tags,
+    importance,
+    relationshipDelta,
+    shouldLogWorldDecision: classification === "secretive"
+      || (sim.day >= 2 && classification === "planning" && topic === "future plans"),
+    shouldWriteMemory: importance !== "low",
+  };
+}
+
+function addConversationEntry(sim: SimulationState, speaker: Citizen, listener: Citizen, plan: ConversationPlan, text: string) {
   speaker.recentConversations.unshift({
     id: `${speaker.id}-${listener.id}-${sim.day}-${Math.round(sim.minute)}-${speaker.recentConversations.length}`,
     day: sim.day,
@@ -70,16 +164,19 @@ function addConversationEntry(sim: SimulationState, speaker: Citizen, listener: 
     speakerName: speaker.name,
     withId: listener.id,
     withName: listener.name,
-    topic,
-    classification,
-    classificationReason,
+    topic: plan.topic,
+    classification: plan.classification,
+    classificationReason: plan.classificationReason,
+    contextZone: plan.contextZone,
+    importance: plan.importance,
+    evidenceSummary: plan.evidenceSummary,
+    evidenceTags: plan.evidenceTags,
     text,
   });
   speaker.recentConversations = speaker.recentConversations.slice(0, 10);
 }
 
-function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, topic: ConversationTopic, classification: ConversationClassification, classificationReason: string, text: string) {
-  const location = conversationLocation(a, b);
+function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, plan: ConversationPlan, text: string) {
   sim.conversationLog.unshift({
     id: `${sim.day}-${Math.round(sim.minute)}-${a.id}-${b.id}-${sim.conversationLog.length}`,
     day: sim.day,
@@ -88,13 +185,17 @@ function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, top
     speakerName: a.name,
     withId: b.id,
     withName: b.name,
-    topic,
-    classification,
-    classificationReason,
-    locationId: location.building.id,
-    locationName: location.building.name,
-    locationSlotId: location.slot.id,
-    locationSlotName: location.slot.name,
+    topic: plan.topic,
+    classification: plan.classification,
+    classificationReason: plan.classificationReason,
+    contextZone: plan.contextZone,
+    importance: plan.importance,
+    evidenceSummary: plan.evidenceSummary,
+    evidenceTags: plan.evidenceTags,
+    locationId: plan.location.building.id,
+    locationName: plan.location.building.name,
+    locationSlotId: plan.location.slot.id,
+    locationSlotName: plan.location.slot.name,
     text,
   });
   sim.conversationLog = sim.conversationLog.slice(0, 240);
@@ -123,16 +224,12 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
     * context.multiplier
     * householdTalk
     * (socialMood ? 1.5 : 1);
-  if (Math.random() > chance) return;
+  const rand = conversationRand(sim, a, b, tick);
+  if (rand() > chance) return;
 
   const reverse = b.relationships[a.id];
-  const rand = Math.random;
-  const topic = brainChooseConversationTopic(sim, a, b, rand);
-  const delta = topic === "personal problem" || topic === "future plans" ? 4 : topic === "rumor" || topic === "people gossip" ? 3 : 2;
-  const aText = brainConversationText(sim, a, b, topic, rand);
-  const bText = brainConversationText(sim, b, a, topic, rand);
-  const classificationResult = brainClassifyConversation(topic, a, b);
-  const { classification, reason: classificationReason } = classificationResult;
+  const plan = createConversationPlan(sim, a, b, context, rand);
+  const delta = plan.relationshipDelta;
 
   relationship.familiarity = clamp(relationship.familiarity + delta, 0, 100);
   relationship.friendship = clamp(relationship.friendship + delta * 0.6 - relationship.dislike * 0.02, 0, 100);
@@ -152,35 +249,33 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   a.today.conversations += 1;
   b.today.conversations += 1;
   sim.totalConversations += 1;
-  addConversationEntry(sim, a, b, topic, classification, classificationReason, aText);
-  addConversationEntry(sim, b, a, topic, classification, classificationReason, bText);
-  addGlobalConversation(sim, a, b, topic, classification, classificationReason, `${aText} ${bText}`);
-  const shouldLogConversationDecision = classification === "secretive"
-    || (sim.day >= 2 && classification === "planning" && topic === "future plans");
-  if (shouldLogConversationDecision) {
+  addConversationEntry(sim, a, b, plan, plan.aText);
+  addConversationEntry(sim, b, a, plan, plan.bText);
+  addGlobalConversation(sim, a, b, plan, `${plan.aText} ${plan.bText}`);
+  if (plan.shouldLogWorldDecision) {
     addWorldDecision(sim, {
       category: "social",
       status: "automatic",
       impact: "low",
-      title: `${a.name} and ${b.name} had a ${classification} conversation`,
-      summary: `${a.name} and ${b.name} talked about ${topic}.`,
+      title: `${a.name} and ${b.name} had a ${plan.classification} conversation`,
+      summary: plan.evidenceSummary,
       actorId: a.id,
       actorName: a.name,
       householdId: a.householdId === b.householdId ? a.householdId : undefined,
       relatedCitizenIds: [a.id, b.id],
-      relatedBuildingId: conversationLocation(a, b).building.id,
+      relatedBuildingId: plan.location.building.id,
       requiresApproval: false,
-      reason: classificationReason,
+      reason: plan.classificationReason,
       effect: "The conversation can shape memories, trust, goals, or civic awareness later.",
     });
   }
   a.currentThought = `I keep thinking about what ${b.name} said.`;
   b.currentThought = `I keep thinking about what ${a.name} said.`;
-  a.currentEmotion = emotionAfterConversation(topic);
-  b.currentEmotion = emotionAfterConversation(topic);
+  a.currentEmotion = emotionAfterConversation(plan.topic);
+  b.currentEmotion = emotionAfterConversation(plan.topic);
 
-  const aCanTell = knows(a, FACTORY_RUMOR) && !knows(b, FACTORY_RUMOR) && topic === "rumor" && relationship.trust > 28;
-  const bCanTell = knows(b, FACTORY_RUMOR) && !knows(a, FACTORY_RUMOR) && topic === "rumor" && reverse.trust > 28;
+  const aCanTell = knows(a, FACTORY_RUMOR) && !knows(b, FACTORY_RUMOR) && plan.topic === "rumor" && relationship.trust > 28;
+  const bCanTell = knows(b, FACTORY_RUMOR) && !knows(a, FACTORY_RUMOR) && plan.topic === "rumor" && reverse.trust > 28;
   if (aCanTell) {
     learn(b, FACTORY_RUMOR);
     addMemory(sim, b, `${a.name} said Northbridge Works may be in trouble.`);
@@ -191,10 +286,10 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
     addMemory(sim, a, `${b.name} said Northbridge Works may be in trouble.`);
     addLifeJournal(sim, a, `${b.name} told me the factory might be in trouble.`);
     addFeed(sim, `${b.name} told ${a.name} the factory rumor.`);
-  } else if (Math.random() < 0.22 || topic === "personal problem" || topic === "future plans") {
-    addMemory(sim, a, `Talked with ${b.name} about ${topic}.`);
-    addMemory(sim, b, `Talked with ${a.name} about ${topic}.`);
-    addLifeJournal(sim, a, bText.replace(b.name, `I heard ${b.name}`));
-    addLifeJournal(sim, b, aText.replace(a.name, `I heard ${a.name}`));
+  } else if (plan.shouldWriteMemory) {
+    addMemory(sim, a, `Talked with ${b.name} about ${plan.topic}. ${plan.evidenceSummary}`);
+    addMemory(sim, b, `Talked with ${a.name} about ${plan.topic}. ${plan.evidenceSummary}`);
+    addLifeJournal(sim, a, plan.bText.replace(b.name, `I heard ${b.name}`));
+    addLifeJournal(sim, b, plan.aText.replace(a.name, `I heard ${a.name}`));
   }
 }
