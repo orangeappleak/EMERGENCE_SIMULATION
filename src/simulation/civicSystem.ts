@@ -6,52 +6,18 @@ import type {
   ConversationEntry,
   ConversationTopic,
   SimulationState,
+  TownConcern,
   WorldObservation,
   WorldObservationKind,
   WorldSignal,
-  WorldSignalStatus,
 } from "../types/simulation";
 import { BUILDINGS } from "./constants";
 import { addWorldDecision, addWorldObservation } from "./eventLog";
 import { clamp } from "./random";
 import { formatTime } from "./time";
 
-const CIVIC_FIRST_VISIBLE_DAY: Record<CivicIssueKind, number> = {
-  money: 1,
-  healthcare: 2,
-  employment: 2,
-  food: 2,
-  education: 3,
-  governance: 4,
-};
-
-const CIVIC_ACTIVE_DAY: Record<CivicIssueKind, number> = {
-  money: 2,
-  healthcare: 3,
-  employment: 3,
-  food: 3,
-  education: 4,
-  governance: 5,
-};
-
-const CIVIC_URGENT_DAY: Record<CivicIssueKind, number> = {
-  money: 4,
-  healthcare: 5,
-  employment: 5,
-  food: 4,
-  education: 6,
-  governance: 7,
-};
-
-function civicIssueCanSurface(sim: SimulationState, kind: CivicIssueKind, force = false) {
-  return force || sim.day >= CIVIC_FIRST_VISIBLE_DAY[kind];
-}
-
-function issueStatusFor(sim: SimulationState, kind: CivicIssueKind, severity: number, force = false): CivicIssueStatus {
-  if (!force) {
-    if (sim.day < CIVIC_ACTIVE_DAY[kind]) return "watching";
-    if (sim.day < CIVIC_URGENT_DAY[kind]) return severity >= 42 ? "active" : "watching";
-  }
+function issueStatusFor(severity: number, force = false): CivicIssueStatus {
+  if (force && severity >= 42) return "active";
   if (severity >= 75) return "urgent";
   if (severity >= 42) return "active";
   return "watching";
@@ -63,9 +29,8 @@ function upsertCivicIssue(
 ) {
   const previous = sim.civicIssues.find((item) => item.id === issue.id);
   const forceImmediate = issue.kind === "employment" && sim.factoryClosed;
-  if (!previous && !civicIssueCanSurface(sim, issue.kind, forceImmediate)) return;
 
-  const status = issueStatusFor(sim, issue.kind, issue.severity, forceImmediate);
+  const status = issueStatusFor(issue.severity, forceImmediate);
   if (previous) {
     const previousStatus = previous.status;
     previous.title = issue.title;
@@ -155,7 +120,7 @@ function signalTitle(kind: WorldObservationKind, buildingName?: string, househol
   return labels[kind];
 }
 
-function signalStatus(confidence: number, maturity: number, severity: number): WorldSignalStatus {
+function signalStatus(confidence: number, maturity: number, severity: number): TownConcern["status"] {
   if ((confidence >= 70 && maturity >= 45) || (severity >= 78 && confidence >= 55)) return "strong";
   if (confidence >= 35 || maturity >= 22) return "watched";
   return "forming";
@@ -163,6 +128,10 @@ function signalStatus(confidence: number, maturity: number, severity: number): W
 
 function isCivicIssueKind(kind: WorldObservationKind): kind is CivicIssueKind {
   return ["money", "healthcare", "employment", "education", "governance", "food"].includes(kind);
+}
+
+function suggestedIssueKind(kind: WorldObservationKind): CivicIssueKind | undefined {
+  return isCivicIssueKind(kind) ? kind : undefined;
 }
 
 function primarySignalKey(observation: WorldObservation) {
@@ -173,15 +142,40 @@ function primarySignalKey(observation: WorldObservation) {
   return `${observation.kind}:${place}`;
 }
 
-function rebuildWorldSignals(sim: SimulationState) {
+function concernStatus(confidence: number, maturity: number, severity: number, promoted: boolean): TownConcern["status"] {
+  if (promoted) return "promoted";
+  return signalStatus(confidence, maturity, severity);
+}
+
+function syncWorldSignalsFromConcerns(sim: SimulationState) {
+  sim.worldSignals = sim.townConcerns.map((concern): WorldSignal => ({
+    id: concern.id.replace(/^concern-/, "signal-"),
+    kind: concern.kind,
+    title: concern.title,
+    status: concern.status,
+    confidence: concern.confidence,
+    severity: concern.severity,
+    maturity: concern.maturity,
+    observationIds: concern.observationIds,
+    affectedCitizenIds: concern.affectedCitizenIds,
+    relatedBuildingIds: concern.relatedBuildingIds,
+    tags: concern.tags,
+    evidence: concern.evidence,
+    firstSeenDay: concern.firstSeenDay,
+    lastUpdatedDay: concern.lastUpdatedDay,
+    lastUpdatedTime: concern.lastUpdatedTime,
+  }));
+}
+
+function rebuildTownConcerns(sim: SimulationState) {
   const groups = new Map<string, WorldObservation[]>();
-  const recentObservations = sim.worldObservations.filter((entry) => sim.day - entry.day <= 3);
+  const recentObservations = sim.worldObservations.filter((entry) => sim.day - entry.day <= 4);
   for (const observation of recentObservations) {
     const key = primarySignalKey(observation);
     groups.set(key, [...(groups.get(key) ?? []), observation]);
   }
 
-  const signals: WorldSignal[] = [];
+  const concerns: TownConcern[] = [];
   for (const [key, observations] of groups) {
     const firstObservation = observations[observations.length - 1];
     const latestObservation = observations[0];
@@ -205,11 +199,15 @@ function rebuildWorldSignals(sim: SimulationState) {
     const promoted = isCivicIssueKind(firstObservation.kind)
       && sim.civicIssues.some((issue) => issue.kind === firstObservation.kind && issue.status !== "resolved");
 
-    signals.push({
-      id: `signal-${key.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
+    const existingIssue = firstObservation.kind === "general"
+      ? undefined
+      : sim.civicIssues.find((issue) => issue.kind === firstObservation.kind && issue.status !== "resolved");
+
+    concerns.push({
+      id: `concern-${key.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
       kind: firstObservation.kind,
       title: signalTitle(firstObservation.kind, buildingName, householdName),
-      status: promoted ? "promoted" : signalStatus(confidence, maturity, severity),
+      status: concernStatus(confidence, maturity, severity, promoted),
       confidence: Math.round(confidence),
       severity: Math.round(severity),
       maturity: Math.round(maturity),
@@ -218,15 +216,18 @@ function rebuildWorldSignals(sim: SimulationState) {
       relatedBuildingIds,
       tags,
       evidence: observations.slice(0, 4).map((entry) => entry.summary),
+      suggestedIssueKind: suggestedIssueKind(firstObservation.kind),
+      promotedIssueId: existingIssue?.id,
       firstSeenDay: firstObservation.day,
       lastUpdatedDay: latestObservation.day,
       lastUpdatedTime: latestObservation.time,
     });
   }
 
-  sim.worldSignals = signals
+  sim.townConcerns = concerns
     .sort((a, b) => (b.confidence + b.severity + b.maturity) - (a.confidence + a.severity + a.maturity))
     .slice(0, 80);
+  syncWorldSignalsFromConcerns(sim);
 }
 
 export function detectWorldObservations(sim: SimulationState) {
@@ -288,21 +289,23 @@ export function detectWorldObservations(sim: SimulationState) {
     });
   }
 
-  const watchedCivicSignals = sim.worldSignals.filter((signal) => (
-    isCivicIssueKind(signal.kind)
-    && (signal.status === "watched" || signal.status === "strong")
+  const coordinatedConcerns = sim.townConcerns.filter((concern) => (
+    concern.suggestedIssueKind
+    && concern.kind !== "governance"
+    && concern.maturity >= 30
+    && (concern.status === "watched" || concern.status === "strong" || concern.status === "promoted")
   )).length;
-  if (matureSeriousTalks.length >= 8 || watchedCivicSignals >= 2) {
+  if ((matureSeriousTalks.length >= 10 && coordinatedConcerns >= 1) || coordinatedConcerns >= 2) {
     const adult = sim.citizens.find((citizen) => hasCivicMaturity(citizen) && (citizen.personality.responsibility > 55 || citizen.personality.sociability > 60));
     addWorldObservation(sim, {
       kind: "governance",
       source: "conversation",
       summary: "People are starting to notice that town problems need coordination.",
-      detail: `${matureSeriousTalks.length} mature serious or planning conversations happened today, with ${watchedCivicSignals} civic signals already being watched.`,
+      detail: `${matureSeriousTalks.length} mature serious or planning conversations happened today, with ${coordinatedConcerns} town concerns already being watched.`,
       citizenId: adult?.id,
       citizenName: adult?.name,
-      severity: clamp(matureSeriousTalks.length * 5 + watchedCivicSignals * 12, 18, 100),
-      confidence: clamp(matureSeriousTalks.length * 5 + watchedCivicSignals * 16, 20, 100),
+      severity: clamp(matureSeriousTalks.length * 5 + coordinatedConcerns * 12, 18, 100),
+      confidence: clamp(matureSeriousTalks.length * 5 + coordinatedConcerns * 16, 20, 100),
       tags: ["coordination", "civic", "leadership"],
     });
   }
@@ -370,28 +373,28 @@ export function detectWorldObservations(sim: SimulationState) {
     });
   }
 
-  rebuildWorldSignals(sim);
+  rebuildTownConcerns(sim);
 }
 
-function signalForIssue(sim: SimulationState, kind: CivicIssueKind) {
-  return sim.worldSignals
-    .filter((signal) => signal.kind === kind)
+function concernForIssue(sim: SimulationState, kind: CivicIssueKind) {
+  return sim.townConcerns
+    .filter((concern) => concern.suggestedIssueKind === kind)
     .sort((a, b) => (b.confidence + b.maturity + b.severity) - (a.confidence + a.maturity + a.severity))[0];
 }
 
-function signalCanPromoteIssue(sim: SimulationState, kind: CivicIssueKind, force = false) {
+function concernCanPromoteIssue(sim: SimulationState, kind: CivicIssueKind, force = false) {
   if (force) return true;
-  const signal = signalForIssue(sim, kind);
-  if (!signal) return false;
-  return signal.status === "strong" || (signal.confidence >= 62 && signal.maturity >= 40 && signal.severity >= 38);
+  const concern = concernForIssue(sim, kind);
+  if (!concern) return false;
+  return concern.status === "strong" || (concern.confidence >= 62 && concern.maturity >= 40 && concern.severity >= 38);
 }
 
-function signalEvidence(sim: SimulationState, kind: CivicIssueKind) {
-  const signal = signalForIssue(sim, kind);
-  if (!signal) return [];
+function concernEvidence(sim: SimulationState, kind: CivicIssueKind) {
+  const concern = concernForIssue(sim, kind);
+  if (!concern) return [];
   return [
-    `Signal: ${signal.title} is ${signal.status} at ${signal.confidence}% confidence.`,
-    ...signal.evidence.slice(0, 2),
+    `Concern: ${concern.title} is ${concern.status} at ${concern.confidence}% confidence and ${concern.maturity}% maturity.`,
+    ...concern.evidence.slice(0, 2),
   ];
 }
 
@@ -410,7 +413,7 @@ export function detectCivicIssues(sim: SimulationState) {
     && conversationHasCivicMaturity(sim, entry)
   )).length;
 
-  if ((strainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) && signalCanPromoteIssue(sim, "money")) {
+  if ((strainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) && concernCanPromoteIssue(sim, "money")) {
     const affected = strainedHouseholds.flatMap((household) => household.memberIds);
     upsertCivicIssue(sim, {
       id: "money-strain",
@@ -423,12 +426,12 @@ export function detectCivicIssues(sim: SimulationState) {
         `${strainedHouseholds.length} households are strained or critical.`,
         `$${Math.round(unpaidBills).toLocaleString()} in unpaid household bills exists across town.`,
         `${moneyStressTalks} money-stress conversations happened today.`,
-        ...signalEvidence(sim, "money"),
+        ...concernEvidence(sim, "money"),
       ],
     });
   }
 
-  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.healthcare && (clinicTransactions >= 4 || clinicShortfalls > 0) && signalCanPromoteIssue(sim, "healthcare")) {
+  if ((clinicTransactions >= 4 || clinicShortfalls > 0) && concernCanPromoteIssue(sim, "healthcare")) {
     upsertCivicIssue(sim, {
       id: "clinic-access",
       kind: "healthcare",
@@ -441,12 +444,12 @@ export function detectCivicIssues(sim: SimulationState) {
       evidence: [
         `${clinicTransactions} clinic payments happened today.`,
         clinicShortfalls ? `${clinicShortfalls} clinic visits could not be fully paid.` : "Clinic demand is becoming visible.",
-        ...signalEvidence(sim, "healthcare"),
+        ...concernEvidence(sim, "healthcare"),
       ],
     });
   }
 
-  if (sim.factoryClosed || (sim.day >= CIVIC_FIRST_VISIBLE_DAY.employment && unemployed.length >= 3 && signalCanPromoteIssue(sim, "employment"))) {
+  if (sim.factoryClosed || (unemployed.length >= 3 && concernCanPromoteIssue(sim, "employment"))) {
     upsertCivicIssue(sim, {
       id: "employment-gap",
       kind: "employment",
@@ -457,12 +460,12 @@ export function detectCivicIssues(sim: SimulationState) {
       evidence: [
         `${unemployed.length} working-age adults do not have a workplace.`,
         sim.factoryClosed ? "Northbridge Works has closed." : "Job gaps are becoming noticeable.",
-        ...signalEvidence(sim, "employment"),
+        ...concernEvidence(sim, "employment"),
       ],
     });
   }
 
-  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.food && lowFoodHouseholds.length >= 2 && signalCanPromoteIssue(sim, "food")) {
+  if (lowFoodHouseholds.length >= 2 && concernCanPromoteIssue(sim, "food")) {
     upsertCivicIssue(sim, {
       id: "food-security",
       kind: "food",
@@ -470,11 +473,11 @@ export function detectCivicIssues(sim: SimulationState) {
       severity: clamp(lowFoodHouseholds.length * 16, 18, 100),
       awareness: clamp(lowFoodHouseholds.length * 9 + moneyStressTalks * 2, 8, 100),
       affectedCitizenIds: lowFoodHouseholds.flatMap((household) => household.memberIds),
-      evidence: [`${lowFoodHouseholds.length} households have low food stock.`, ...signalEvidence(sim, "food")],
+      evidence: [`${lowFoodHouseholds.length} households have low food stock.`, ...concernEvidence(sim, "food")],
     });
   }
 
-  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.education && schoolTrouble.length >= 3 && signalCanPromoteIssue(sim, "education")) {
+  if (schoolTrouble.length >= 3 && concernCanPromoteIssue(sim, "education")) {
     upsertCivicIssue(sim, {
       id: "school-strain",
       kind: "education",
@@ -482,12 +485,12 @@ export function detectCivicIssues(sim: SimulationState) {
       severity: clamp(schoolTrouble.length * 11, 20, 100),
       awareness: clamp(schoolTrouble.length * 7 + seriousTownTalk * 2, 8, 100),
       affectedCitizenIds: schoolTrouble.map((citizen) => citizen.id),
-      evidence: [`${schoolTrouble.length} students show attendance or grade trouble.`, ...signalEvidence(sim, "education")],
+      evidence: [`${schoolTrouble.length} students show attendance or grade trouble.`, ...concernEvidence(sim, "education")],
     });
   }
 
   const activeCivicPressure = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
-  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.governance && (seriousTownTalk >= 14 || activeCivicPressure >= 2) && signalCanPromoteIssue(sim, "governance")) {
+  if ((seriousTownTalk >= 14 || activeCivicPressure >= 2) && concernCanPromoteIssue(sim, "governance")) {
     upsertCivicIssue(sim, {
       id: "governance-gap",
       kind: "governance",
@@ -501,7 +504,7 @@ export function detectCivicIssues(sim: SimulationState) {
       evidence: [
         `${seriousTownTalk} serious or planning conversations happened today.`,
         "There is no formal leader or agency for town problems yet.",
-        ...signalEvidence(sim, "governance"),
+        ...concernEvidence(sim, "governance"),
       ],
     });
   }

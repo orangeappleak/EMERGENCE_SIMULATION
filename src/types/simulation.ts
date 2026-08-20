@@ -124,6 +124,8 @@ export type WorldObservationSource =
 
 export type WorldSignalStatus = "forming" | "watched" | "strong" | "promoted";
 
+export type TownConcernStatus = "forming" | "watched" | "strong" | "promoted";
+
 export type CivicIssue = {
   id: string;
   kind: CivicIssueKind;
@@ -170,6 +172,26 @@ export type WorldSignal = {
   relatedBuildingIds: string[];
   tags: string[];
   evidence: string[];
+  firstSeenDay: number;
+  lastUpdatedDay: number;
+  lastUpdatedTime: string;
+};
+
+export type TownConcern = {
+  id: string;
+  kind: WorldObservationKind;
+  title: string;
+  status: TownConcernStatus;
+  confidence: number;
+  severity: number;
+  maturity: number;
+  observationIds: string[];
+  affectedCitizenIds: string[];
+  relatedBuildingIds: string[];
+  tags: string[];
+  evidence: string[];
+  suggestedIssueKind?: CivicIssueKind;
+  promotedIssueId?: string;
   firstSeenDay: number;
   lastUpdatedDay: number;
   lastUpdatedTime: string;
@@ -525,6 +547,7 @@ export type SimulationState = {
   totalConversations: number;
   worldDecisions: WorldDecision[];
   worldObservations: WorldObservation[];
+  townConcerns: TownConcern[];
   worldSignals: WorldSignal[];
   civicIssues: CivicIssue[];
   transactionLog: EconomyTransaction[];
