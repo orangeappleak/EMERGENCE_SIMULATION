@@ -4,6 +4,8 @@ export const FACTORY_RUMOR = "factory_layoffs_may_happen";
 
 export const WALK_PIXELS_PER_SIM_MINUTE = 12;
 
+const PIXEL_SPACES = "/assets/pixel-spaces";
+
 export const BUILDINGS: Building[] = [
   { id: "home_01", name: "Maple House", kind: "home", x: 145, y: 118, width: 116, height: 92, color: "#c78452" },
   { id: "home_02", name: "Oak Duplex", kind: "home", x: 292, y: 116, width: 116, height: 92, color: "#bd6f5c" },
@@ -82,11 +84,13 @@ export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
       { id: "yard", name: "Front yard", slotKinds: ["yard", "entry"], x: 54, y: 48, width: 38, height: 26, color: "#b8caad" },
     ],
     furniture: [
-      { id: "home_sofa", kind: "sofa", x: 16, y: 56, width: 20, height: 8, color: "#b54c4c" },
-      { id: "home_table", kind: "table", x: 34, y: 52, width: 10, height: 12, color: "#8c5a3a" },
-      { id: "home_counter", kind: "counter", x: 12, y: 14, width: 28, height: 7, color: "#e7e2cf" },
-      { id: "home_bed", kind: "bed", x: 62, y: 18, width: 20, height: 13, color: "#ce4f4f" },
-      { id: "home_plant", kind: "plant", x: 76, y: 57, width: 8, height: 8, color: "#3f8a4f" },
+      { id: "home_sofa", kind: "sofa", x: 14, y: 55, width: 20, height: 12, color: "#b54c4c", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Couch_large_red.png`, label: "sofa" },
+      { id: "home_table", kind: "table", x: 34, y: 52, width: 11, height: 12, color: "#8c5a3a", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Coffee_table_1.png`, label: "coffee table" },
+      { id: "home_counter", kind: "counter", x: 10, y: 14, width: 24, height: 9, color: "#e7e2cf", assetUrl: `${PIXEL_SPACES}/Furniture/Kitchen/Countertop.png`, label: "counter" },
+      { id: "home_fridge", kind: "counter", x: 36, y: 12, width: 9, height: 18, color: "#dce6ea", assetUrl: `${PIXEL_SPACES}/Furniture/Kitchen/Refrigerator_large_white.png`, label: "fridge" },
+      { id: "home_bed", kind: "bed", x: 62, y: 17, width: 22, height: 15, color: "#ce4f4f", assetUrl: `${PIXEL_SPACES}/Furniture/Bedroom/Bed_red.png`, label: "bed" },
+      { id: "home_drawer", kind: "shelf", x: 78, y: 31, width: 9, height: 9, color: "#a76d4b", assetUrl: `${PIXEL_SPACES}/Furniture/Bedroom/Drawer_medium_1_a.png`, label: "drawer" },
+      { id: "home_plant", kind: "plant", x: 76, y: 56, width: 8, height: 10, color: "#3f8a4f", assetUrl: `${PIXEL_SPACES}/Objects/Living Room/Flowerpot_medium_green.png`, label: "plant" },
     ],
   },
   factory: {
@@ -98,10 +102,10 @@ export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
       { id: "loading", name: "Loading entrance", slotKinds: ["entry"], x: 64, y: 48, width: 28, height: 26, color: "#9aa4a8" },
     ],
     furniture: [
-      { id: "factory_machine_1", kind: "machine", x: 16, y: 30, width: 16, height: 13, color: "#53606a" },
-      { id: "factory_machine_2", kind: "machine", x: 38, y: 48, width: 16, height: 13, color: "#53606a" },
-      { id: "factory_table", kind: "table", x: 70, y: 27, width: 14, height: 8, color: "#8c5a3a" },
-      { id: "factory_shelf", kind: "shelf", x: 70, y: 56, width: 16, height: 10, color: "#6f5f4c" },
+      { id: "factory_machine_1", kind: "machine", x: 16, y: 30, width: 18, height: 13, color: "#53606a", assetUrl: `${PIXEL_SPACES}/Furniture/Kitchen/Countertop_connecting.png`, label: "work bench" },
+      { id: "factory_machine_2", kind: "machine", x: 38, y: 48, width: 18, height: 13, color: "#53606a", assetUrl: `${PIXEL_SPACES}/Furniture/Kitchen/Countertop_connecting.png`, label: "work bench" },
+      { id: "factory_table", kind: "table", x: 70, y: 27, width: 14, height: 10, color: "#8c5a3a", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_medium.png`, label: "break table" },
+      { id: "factory_shelf", kind: "shelf", x: 70, y: 56, width: 16, height: 12, color: "#6f5f4c", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Shelf_medium.png`, label: "storage shelf" },
     ],
   },
   market: {
@@ -113,10 +117,10 @@ export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
       { id: "entry", name: "Market entrance", slotKinds: ["entry"], x: 68, y: 8, width: 24, height: 36, color: "#b9c9d0" },
     ],
     furniture: [
-      { id: "market_counter", kind: "counter", x: 14, y: 58, width: 36, height: 8, color: "#9b5647" },
-      { id: "market_shelf_1", kind: "shelf", x: 16, y: 17, width: 40, height: 6, color: "#63784e" },
-      { id: "market_shelf_2", kind: "shelf", x: 16, y: 31, width: 40, height: 6, color: "#63784e" },
-      { id: "market_plant", kind: "plant", x: 76, y: 20, width: 8, height: 8, color: "#3f8a4f" },
+      { id: "market_counter", kind: "counter", x: 14, y: 58, width: 32, height: 10, color: "#9b5647", assetUrl: `${PIXEL_SPACES}/Furniture/Kitchen/Countertop_connecting.png`, label: "shop counter" },
+      { id: "market_shelf_1", kind: "shelf", x: 16, y: 17, width: 38, height: 10, color: "#63784e", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Shelf_large.png`, label: "shelf" },
+      { id: "market_shelf_2", kind: "shelf", x: 16, y: 31, width: 38, height: 10, color: "#63784e", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Shelf_large.png`, label: "shelf" },
+      { id: "market_plant", kind: "plant", x: 76, y: 20, width: 8, height: 10, color: "#3f8a4f", assetUrl: `${PIXEL_SPACES}/Objects/Living Room/Flowerpot_medium_yellow.png`, label: "plant" },
     ],
   },
   office: {
@@ -128,11 +132,11 @@ export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
       { id: "lobby", name: "Office lobby", slotKinds: ["entry"], x: 68, y: 40, width: 24, height: 34, color: "#ccd6d2" },
     ],
     furniture: [
-      { id: "office_desk_1", kind: "desk", x: 16, y: 18, width: 16, height: 10, color: "#7d92ac" },
-      { id: "office_desk_2", kind: "desk", x: 40, y: 18, width: 16, height: 10, color: "#7d92ac" },
-      { id: "office_desk_3", kind: "desk", x: 16, y: 48, width: 16, height: 10, color: "#7d92ac" },
-      { id: "office_counter", kind: "counter", x: 73, y: 17, width: 12, height: 8, color: "#87604b" },
-      { id: "office_plant", kind: "plant", x: 76, y: 52, width: 8, height: 8, color: "#3f8a4f" },
+      { id: "office_desk_1", kind: "desk", x: 16, y: 18, width: 18, height: 11, color: "#7d92ac", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_long.png`, label: "desk" },
+      { id: "office_desk_2", kind: "desk", x: 40, y: 18, width: 18, height: 11, color: "#7d92ac", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_long.png`, label: "desk" },
+      { id: "office_desk_3", kind: "desk", x: 16, y: 48, width: 18, height: 11, color: "#7d92ac", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_long.png`, label: "desk" },
+      { id: "office_counter", kind: "counter", x: 73, y: 17, width: 12, height: 10, color: "#87604b", assetUrl: `${PIXEL_SPACES}/Furniture/Kitchen/Countertop.png`, label: "coffee counter" },
+      { id: "office_plant", kind: "plant", x: 76, y: 52, width: 8, height: 10, color: "#3f8a4f", assetUrl: `${PIXEL_SPACES}/Objects/Living Room/Flowerpot_medium_red.png`, label: "plant" },
     ],
   },
   clinic: {
@@ -143,11 +147,11 @@ export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
       { id: "exam", name: "Exam room", slotKinds: ["exam"], x: 8, y: 8, width: 84, height: 30, color: "#d8eef0" },
     ],
     furniture: [
-      { id: "clinic_bed", kind: "bed", x: 18, y: 18, width: 24, height: 10, color: "#e7e2cf" },
-      { id: "clinic_desk", kind: "desk", x: 58, y: 18, width: 16, height: 10, color: "#7d92ac" },
-      { id: "clinic_chair_1", kind: "chair", x: 20, y: 55, width: 8, height: 8, color: "#8c5a3a" },
-      { id: "clinic_chair_2", kind: "chair", x: 34, y: 55, width: 8, height: 8, color: "#8c5a3a" },
-      { id: "clinic_plant", kind: "plant", x: 76, y: 54, width: 8, height: 8, color: "#3f8a4f" },
+      { id: "clinic_bed", kind: "bed", x: 18, y: 16, width: 24, height: 14, color: "#e7e2cf", assetUrl: `${PIXEL_SPACES}/Furniture/Bedroom/Bed_yellow.png`, label: "exam bed" },
+      { id: "clinic_desk", kind: "desk", x: 58, y: 18, width: 16, height: 11, color: "#7d92ac", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_medium.png`, label: "desk" },
+      { id: "clinic_chair_1", kind: "chair", x: 20, y: 55, width: 10, height: 9, color: "#8c5a3a", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Couch_small_2_blue_side.png`, label: "waiting seat" },
+      { id: "clinic_chair_2", kind: "chair", x: 34, y: 55, width: 10, height: 9, color: "#8c5a3a", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Couch_small_2_blue_side.png`, label: "waiting seat" },
+      { id: "clinic_plant", kind: "plant", x: 76, y: 54, width: 8, height: 10, color: "#3f8a4f", assetUrl: `${PIXEL_SPACES}/Objects/Living Room/Flowerpot_medium_green.png`, label: "plant" },
     ],
   },
   school: {
@@ -160,11 +164,11 @@ export const INTERIOR_LAYOUTS: Record<Building["kind"], InteriorLayout> = {
       { id: "yard", name: "School yard", slotKinds: ["yard", "entry"], x: 58, y: 54, width: 34, height: 20, color: "#b7caa8" },
     ],
     furniture: [
-      { id: "school_board", kind: "board", x: 14, y: 14, width: 34, height: 6, color: "#3f7656" },
-      { id: "school_desk_1", kind: "desk", x: 16, y: 28, width: 10, height: 8, color: "#8c5a3a" },
-      { id: "school_desk_2", kind: "desk", x: 34, y: 28, width: 10, height: 8, color: "#8c5a3a" },
-      { id: "school_office_desk", kind: "desk", x: 66, y: 24, width: 16, height: 10, color: "#7d92ac" },
-      { id: "school_plant", kind: "plant", x: 74, y: 60, width: 8, height: 8, color: "#3f8a4f" },
+      { id: "school_board", kind: "board", x: 14, y: 14, width: 34, height: 7, color: "#3f7656", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Window_square.png`, label: "board" },
+      { id: "school_desk_1", kind: "desk", x: 16, y: 28, width: 12, height: 9, color: "#8c5a3a", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_medium.png`, label: "student desk" },
+      { id: "school_desk_2", kind: "desk", x: 34, y: 28, width: 12, height: 9, color: "#8c5a3a", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_medium.png`, label: "student desk" },
+      { id: "school_office_desk", kind: "desk", x: 66, y: 24, width: 16, height: 11, color: "#7d92ac", assetUrl: `${PIXEL_SPACES}/Furniture/Living Room/Table_long.png`, label: "office desk" },
+      { id: "school_plant", kind: "plant", x: 74, y: 60, width: 8, height: 10, color: "#3f8a4f", assetUrl: `${PIXEL_SPACES}/Objects/Living Room/Flowerpot_medium_yellow.png`, label: "plant" },
     ],
   },
 };
