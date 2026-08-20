@@ -8,6 +8,9 @@ export const WORLD_HEIGHT = 960;
 const TILE_SIZE = 32;
 const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 2.25;
+const NPC_FRAME_SIZE = 32;
+const NPC_FRAME_INSET = 1;
+const CITIZEN_PIXEL_SCALE = 1.6;
 
 type CitizenSprite = {
   root: PIXI.Container;
@@ -376,12 +379,22 @@ function fitRendererToHost(app: PIXI.Application, host: HTMLElement, viewport: P
   return () => observer.disconnect();
 }
 
+function sharpenTexture(texture: PIXI.Texture) {
+  texture.source.scaleMode = "nearest";
+}
+
 function frameFromSheet(texture: PIXI.Texture, col: number, row: number) {
-  const frameWidth = 32;
-  const frameHeight = 32;
+  const croppedSize = NPC_FRAME_SIZE - NPC_FRAME_INSET * 2;
   return new PIXI.Texture({
     source: texture.source,
-    frame: new PIXI.Rectangle(col * frameWidth, row * frameHeight, frameWidth, frameHeight),
+    frame: new PIXI.Rectangle(
+      col * NPC_FRAME_SIZE + NPC_FRAME_INSET,
+      row * NPC_FRAME_SIZE + NPC_FRAME_INSET,
+      croppedSize,
+      croppedSize,
+    ),
+    orig: new PIXI.Rectangle(0, 0, NPC_FRAME_SIZE, NPC_FRAME_SIZE),
+    trim: new PIXI.Rectangle(NPC_FRAME_INSET, NPC_FRAME_INSET, croppedSize, croppedSize),
   });
 }
 
@@ -426,12 +439,14 @@ function makeCitizenSprite(citizen: Citizen, textures: Record<string, PIXI.Textu
   const frames = npcFrames(textures[sheet]);
   const sprite = new PIXI.Sprite(frames.idleFrames.down);
   sprite.anchor.set(0.5, 0.82);
-  sprite.scale.set(1.6);
+  sprite.scale.set(CITIZEN_PIXEL_SCALE);
+  sprite.roundPixels = true;
 
   const selection = new PIXI.Graphics();
   const marker = new PIXI.Sprite(textures[GAME_ASSETS.props.coin]);
   marker.anchor.set(0.5);
-  marker.scale.set(1.6);
+  marker.scale.set(CITIZEN_PIXEL_SCALE);
+  marker.roundPixels = true;
   marker.position.set(11, -26);
 
   const talkBubble = makeTalkBubble();
@@ -482,15 +497,15 @@ function updateCitizenSprite(view: CitizenSprite, citizen: Citizen, selected: bo
   view.sprite.texture = walking
     ? view.walkFrames[view.facingDirection][walkCycleFrame]
     : view.idleFrames[view.facingDirection];
-  view.sprite.scale.x = 1.6;
-  view.sprite.scale.y = 1.6;
+  view.sprite.scale.x = CITIZEN_PIXEL_SCALE;
+  view.sprite.scale.y = CITIZEN_PIXEL_SCALE;
   view.sprite.y = walking
     ? Math.sin(now / 75 + citizenIndex) * 1.4
     : Math.sin(now / 820 + citizenIndex) * 0.45;
   view.sprite.rotation = 0;
   view.talkBubble.y = view.talkBubble.visible ? Math.sin(now / 180 + citizenIndex) * 1.2 : 0;
   view.marker.y = walking ? Math.sin(now / 140 + citizenIndex) * 0.8 : 0;
-  view.root.position.set(citizen.x, citizen.y);
+  view.root.position.set(Math.round(citizen.x), Math.round(citizen.y));
   view.root.zIndex = citizen.y;
   view.lastX = citizen.x;
   view.lastY = citizen.y;
@@ -541,6 +556,7 @@ export async function createPixiWorld(
   ];
   const loaded = await PIXI.Assets.load(assetUrls);
   const textures = loaded as Record<string, PIXI.Texture>;
+  for (const texture of Object.values(textures)) sharpenTexture(texture);
 
   app.canvas.className = "pixi-canvas";
   host.querySelector(".map-loading")?.remove();
