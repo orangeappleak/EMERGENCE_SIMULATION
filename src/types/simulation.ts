@@ -44,6 +44,8 @@ export type InteriorFurniture = {
   width: number;
   height: number;
   color: string;
+  assetUrl?: string;
+  label?: string;
 };
 
 export type InteriorLayout = {

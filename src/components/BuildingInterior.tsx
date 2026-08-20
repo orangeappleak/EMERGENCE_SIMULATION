@@ -15,7 +15,7 @@ function buildingById(buildingId: string): Building | null {
 }
 
 function roomForCitizen(citizen: Citizen, rooms: InteriorRoom[]) {
-  const slot = slotById.get(citizen.currentSlotId) ?? slotById.get(citizen.destinationSlotId);
+  const slot = slotById.get(citizen.currentSlotId);
   return rooms.find((room) => slot && room.slotKinds.includes(slot.kind)) ?? rooms[0];
 }
 
@@ -34,15 +34,31 @@ function citizenPositionInRoom(citizen: Citizen, room: InteriorRoom, index: numb
   };
 }
 
+function roomClassName(room: InteriorRoom) {
+  const kind = room.slotKinds[0] ?? "entry";
+  return `interior-room room-${kind}`;
+}
+
+function isLiveInsideBuilding(citizen: Citizen, building: Building) {
+  const currentSlot = slotById.get(citizen.currentSlotId);
+  const destinationSlot = slotById.get(citizen.destinationSlotId);
+  if (currentSlot?.buildingId !== building.id) return false;
+
+  const isSettled = citizen.route.length === 0;
+  const movingInsideSameBuilding = destinationSlot?.buildingId === building.id;
+  return isSettled || movingInsideSameBuilding;
+}
+
 export function BuildingInterior({ buildingId, sim, onClose, onSelectCitizen }: BuildingInteriorProps) {
   const building = buildingById(buildingId);
   if (!building) return null;
 
   const layout = INTERIOR_LAYOUTS[building.kind];
-  const citizensInside = sim.citizens.filter((citizen) => {
+  const citizensInside = sim.citizens.filter((citizen) => isLiveInsideBuilding(citizen, building));
+  const citizensHeadingIn = sim.citizens.filter((citizen) => {
     const currentSlot = slotById.get(citizen.currentSlotId);
     const destinationSlot = slotById.get(citizen.destinationSlotId);
-    return currentSlot?.buildingId === building.id || destinationSlot?.buildingId === building.id;
+    return currentSlot?.buildingId !== building.id && destinationSlot?.buildingId === building.id && citizen.route.length > 0;
   });
 
   const citizensByRoom = new Map<string, Citizen[]>();
@@ -57,7 +73,10 @@ export function BuildingInterior({ buildingId, sim, onClose, onSelectCitizen }: 
       <div className="panel-title-row">
         <div>
           <h2>{building.name}</h2>
-          <p className="muted">{layout.name} · {citizensInside.length} inside or heading in</p>
+          <p className="muted">
+            {layout.name} · {citizensInside.length} inside
+            {citizensHeadingIn.length ? ` · ${citizensHeadingIn.length} heading in` : ""}
+          </p>
         </div>
         <button className="panel-close" type="button" onClick={onClose} aria-label="Close building panel">Close</button>
       </div>
@@ -67,7 +86,7 @@ export function BuildingInterior({ buildingId, sim, onClose, onSelectCitizen }: 
           const people = citizensByRoom.get(room.id) ?? [];
           return (
             <div
-              className="interior-room"
+              className={roomClassName(room)}
               key={room.id}
               style={{
                 background: room.color,
@@ -85,8 +104,8 @@ export function BuildingInterior({ buildingId, sim, onClose, onSelectCitizen }: 
 
         {layout.furniture.map((item) => (
           <div
-            aria-label={item.kind}
-            className={`interior-furniture furniture-${item.kind}`}
+            aria-label={item.label ?? item.kind}
+            className={`interior-furniture furniture-${item.kind}${item.assetUrl ? " has-sprite" : ""}`}
             key={item.id}
             style={{
               background: item.color,
@@ -95,7 +114,9 @@ export function BuildingInterior({ buildingId, sim, onClose, onSelectCitizen }: 
               top: `${item.y}%`,
               width: `${item.width}%`,
             }}
-          />
+          >
+            {item.assetUrl ? <img alt="" draggable={false} src={item.assetUrl} /> : null}
+          </div>
         ))}
 
         {layout.rooms.flatMap((room) => {
