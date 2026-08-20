@@ -74,6 +74,8 @@ export type ConversationTopic = "workplace gossip" | "people gossip" | "money st
 
 export type ConversationClassification = "casual" | "serious" | "secretive" | "supportive" | "planning";
 
+export type ConversationImportance = "low" | "medium" | "high";
+
 export type PersonalGoalKind = "school" | "career" | "money" | "friendship" | "family" | "wellbeing" | "curiosity";
 
 export type AuthorityOutcome = "free" | "guided" | "blocked" | "defied";
@@ -300,6 +302,10 @@ export type ConversationEntry = {
   topic: ConversationTopic;
   classification: ConversationClassification;
   classificationReason?: string;
+  contextZone?: "home" | "work" | "school" | "public" | "street";
+  importance?: ConversationImportance;
+  evidenceSummary?: string;
+  evidenceTags?: string[];
   locationId?: string;
   locationName?: string;
   locationSlotId?: string;

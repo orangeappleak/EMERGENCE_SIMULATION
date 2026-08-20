@@ -574,8 +574,9 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
             <li key={entry.id}>
               <button className="conversation-link" type="button" disabled={!entry.withId} onClick={() => entry.withId && onSelectCitizen(entry.withId)}>
                 <strong>{entry.withName} · {entry.topic} · {entry.classification}</strong>
-                <span>Day {entry.day} {entry.time}</span>
+                <span>Day {entry.day} {entry.time}{entry.importance ? ` · ${entry.importance} importance` : ""}</span>
                 <em>{entry.text}</em>
+                {entry.evidenceSummary ? <small>{entry.evidenceSummary}</small> : null}
                 {entry.classificationReason ? <small>{entry.classificationReason}</small> : null}
               </button>
             </li>

@@ -19,6 +19,10 @@ function matches(entry: ConversationEntry, query: string) {
     entry.classification,
     entry.locationName,
     entry.locationSlotName,
+    entry.contextZone,
+    entry.importance,
+    entry.evidenceSummary,
+    ...(entry.evidenceTags ?? []),
     entry.text,
   ].join(" ").toLowerCase();
   return text.includes(query);
@@ -105,7 +109,7 @@ export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: Conversa
                     <li key={entry.id}>
                       <div className="conversation-meta">
                         <strong>{entry.time}</strong>
-                        <span>{entry.locationName}{entry.locationSlotName ? ` · ${entry.locationSlotName}` : ""}</span>
+                        <span>{entry.locationName}{entry.locationSlotName ? ` · ${entry.locationSlotName}` : ""}{entry.importance ? ` · ${label(entry.importance)}` : ""}</span>
                       </div>
                       <div className="conversation-people">
                         <button type="button" onClick={() => entry.speakerId && onSelectCitizen(entry.speakerId)}>
@@ -117,6 +121,12 @@ export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: Conversa
                         </button>
                       </div>
                       <p>{entry.text}</p>
+                      {entry.evidenceSummary ? <small>{entry.evidenceSummary}</small> : null}
+                      {entry.evidenceTags?.length ? (
+                        <div className="evidence-tags">
+                          {entry.evidenceTags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}
+                        </div>
+                      ) : null}
                       {entry.classificationReason ? (
                         <small className="classification-reason">
                           {label(entry.classification)} because {entry.classificationReason.charAt(0).toLowerCase()}{entry.classificationReason.slice(1)}
