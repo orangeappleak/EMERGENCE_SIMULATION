@@ -1,4 +1,4 @@
-import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, RoutePoint, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent } from "../types/simulation";
+import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, RoutePoint, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent, WorldObservation, WorldObservationKind, WorldSignal, WorldSignalStatus } from "../types/simulation";
 import {
   chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
@@ -573,6 +573,8 @@ export function createSimulation(): SimulationState {
       reason: "Major autonomous behavior needs a visible history before AI and leadership systems arrive.",
       effect: "Important citizen, household, and civic events will appear in the World Decisions panel.",
     }],
+    worldObservations: [],
+    worldSignals: [],
     civicIssues: [],
     transactionLog: [],
     businessAccounts: {
@@ -791,6 +793,249 @@ function conversationHasCivicMaturity(sim: SimulationState, entry: ConversationE
   const speaker = entry.speakerId ? sim.citizens.find((citizen) => citizen.id === entry.speakerId) : null;
   const listener = sim.citizens.find((citizen) => citizen.id === entry.withId);
   return Boolean((speaker && hasCivicMaturity(speaker)) || (listener && hasCivicMaturity(listener)));
+}
+
+function observationKindForTopic(topic: ConversationTopic): WorldObservationKind {
+  if (topic === "money stress") return "money";
+  if (topic === "school") return "education";
+  if (topic === "workplace gossip") return "employment";
+  if (topic === "family") return "housing";
+  if (topic === "future plans" || topic === "personal problem") return "social";
+  if (topic === "rumor") return "general";
+  return "social";
+}
+
+function signalTitle(kind: WorldObservationKind, buildingName?: string, householdName?: string) {
+  if (buildingName) return `${buildingName} pattern`;
+  if (householdName) return `${householdName} pattern`;
+  const labels: Record<WorldObservationKind, string> = {
+    money: "Money strain signal",
+    healthcare: "Healthcare pressure signal",
+    employment: "Work stability signal",
+    education: "School support signal",
+    food: "Food security signal",
+    governance: "Civic coordination signal",
+    movement: "Town movement signal",
+    weather: "Weather adaptation signal",
+    social: "Social wellbeing signal",
+    housing: "Household life signal",
+    safety: "Safety signal",
+    general: "Town pattern signal",
+  };
+  return labels[kind];
+}
+
+function signalStatus(confidence: number, maturity: number, severity: number): WorldSignalStatus {
+  if ((confidence >= 70 && maturity >= 45) || (severity >= 78 && confidence >= 55)) return "strong";
+  if (confidence >= 35 || maturity >= 22) return "watched";
+  return "forming";
+}
+
+function observationKey(observation: Omit<WorldObservation, "id" | "day" | "time">) {
+  return [
+    observation.kind,
+    observation.source,
+    observation.citizenId ?? "town",
+    observation.householdId ?? "none",
+    observation.buildingId ?? "none",
+    observation.summary,
+  ].join(":");
+}
+
+function addWorldObservation(sim: SimulationState, observation: Omit<WorldObservation, "id" | "day" | "time">) {
+  const key = observationKey(observation);
+  const duplicate = sim.worldObservations.some((entry) => (
+    entry.day === sim.day
+    && observationKey(entry) === key
+  ));
+  if (duplicate) return;
+
+  sim.worldObservations.unshift({
+    ...observation,
+    id: `${sim.day}-${Math.round(sim.minute)}-${sim.worldObservations.length}-${observation.kind}`,
+    day: sim.day,
+    time: formatTime(sim.minute),
+  });
+  sim.worldObservations = sim.worldObservations.slice(0, 320);
+}
+
+function primarySignalKey(observation: WorldObservation) {
+  const place = observation.buildingId ?? observation.householdId ?? observation.tags[0] ?? "town";
+  return `${observation.kind}:${place}`;
+}
+
+function rebuildWorldSignals(sim: SimulationState) {
+  const groups = new Map<string, WorldObservation[]>();
+  const recentObservations = sim.worldObservations.filter((entry) => sim.day - entry.day <= 3);
+  for (const observation of recentObservations) {
+    const key = primarySignalKey(observation);
+    groups.set(key, [...(groups.get(key) ?? []), observation]);
+  }
+
+  const signals: WorldSignal[] = [];
+  for (const [key, observations] of groups) {
+    const firstObservation = observations[observations.length - 1];
+    const latestObservation = observations[0];
+    const affectedCitizenIds = [...new Set(observations.map((entry) => entry.citizenId).filter(Boolean) as string[])];
+    const relatedBuildingIds = [...new Set(observations.map((entry) => entry.buildingId).filter(Boolean) as string[])];
+    const tags = [...new Set(observations.flatMap((entry) => entry.tags))].slice(0, 8);
+    const adultEvidence = observations.filter((entry) => {
+      if (!entry.citizenId) return true;
+      const citizen = sim.citizens.find((item) => item.id === entry.citizenId);
+      return citizen ? hasCivicMaturity(citizen) : true;
+    }).length;
+    const daysSpanned = new Set(observations.map((entry) => entry.day)).size;
+    const averageSeverity = observations.reduce((sum, entry) => sum + entry.severity, 0) / observations.length;
+    const averageConfidence = observations.reduce((sum, entry) => sum + entry.confidence, 0) / observations.length;
+    const confidence = clamp(observations.length * 10 + adultEvidence * 7 + averageConfidence * 0.35, 8, 100);
+    const maturity = clamp(daysSpanned * 18 + adultEvidence * 8 + observations.length * 3, 4, 100);
+    const severity = clamp(averageSeverity + Math.max(0, observations.length - 1) * 2, 5, 100);
+    const buildingName = firstObservation.buildingName;
+    const householdName = firstObservation.householdName;
+
+    signals.push({
+      id: `signal-${key.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
+      kind: firstObservation.kind,
+      title: signalTitle(firstObservation.kind, buildingName, householdName),
+      status: signalStatus(confidence, maturity, severity),
+      confidence: Math.round(confidence),
+      severity: Math.round(severity),
+      maturity: Math.round(maturity),
+      observationIds: observations.map((entry) => entry.id),
+      affectedCitizenIds,
+      relatedBuildingIds,
+      tags,
+      evidence: observations.slice(0, 4).map((entry) => entry.summary),
+      firstSeenDay: firstObservation.day,
+      lastUpdatedDay: latestObservation.day,
+      lastUpdatedTime: latestObservation.time,
+    });
+  }
+
+  sim.worldSignals = signals
+    .sort((a, b) => (b.confidence + b.severity + b.maturity) - (a.confidence + a.severity + a.maturity))
+    .slice(0, 80);
+}
+
+function detectWorldObservations(sim: SimulationState) {
+  for (const household of sim.households) {
+    const members = sim.citizens.filter((citizen) => citizen.householdId === household.id);
+    const adultMember = members.find(hasCivicMaturity);
+    if (household.financialStatus !== "stable" || household.unpaidBills > 0) {
+      addWorldObservation(sim, {
+        kind: "money",
+        source: "need",
+        summary: `${household.name} is showing money pressure.`,
+        detail: `${household.name} is ${household.financialStatus} with $${Math.round(household.unpaidBills).toLocaleString()} in unpaid bills.`,
+        citizenId: adultMember?.id,
+        citizenName: adultMember?.name,
+        householdId: household.id,
+        householdName: household.name,
+        severity: clamp(household.stress + household.unpaidBills * 0.02, 10, 100),
+        confidence: adultMember ? 55 : 35,
+        tags: ["household", "money", household.financialStatus],
+      });
+    }
+    if (household.foodStock < 35) {
+      addWorldObservation(sim, {
+        kind: "food",
+        source: "need",
+        summary: `${household.name} has low food at home.`,
+        detail: `${household.name} has ${Math.round(household.foodStock)}% food stock remaining.`,
+        citizenId: adultMember?.id,
+        citizenName: adultMember?.name,
+        householdId: household.id,
+        householdName: household.name,
+        severity: clamp(60 - household.foodStock, 18, 100),
+        confidence: 52,
+        tags: ["household", "food", "need"],
+      });
+    }
+  }
+
+  const conversationsToday = sim.conversationLog.filter((entry) => entry.day === sim.day);
+  for (const entry of conversationsToday.slice(0, 24)) {
+    if (entry.classification !== "serious" && entry.classification !== "planning" && entry.topic !== "money stress" && entry.topic !== "personal problem") continue;
+    const building = entry.locationId ? BUILDINGS.find((item) => item.id === entry.locationId) : undefined;
+    addWorldObservation(sim, {
+      kind: observationKindForTopic(entry.topic),
+      source: "conversation",
+      summary: `${entry.speakerName ?? "Someone"} and ${entry.withName} talked about ${entry.topic}.`,
+      detail: entry.text,
+      citizenId: entry.speakerId,
+      citizenName: entry.speakerName,
+      buildingId: building?.id,
+      buildingName: building?.name,
+      severity: entry.classification === "serious" ? 58 : entry.classification === "planning" ? 48 : 36,
+      confidence: conversationHasCivicMaturity(sim, entry) ? 62 : 32,
+      tags: [entry.topic, entry.classification],
+    });
+  }
+
+  const transactionsToday = sim.transactionLog.filter((entry) => entry.day === sim.day);
+  const clinicTransactions = transactionsToday.filter((entry) => entry.category === "clinic");
+  if (clinicTransactions.length >= 2) {
+    addWorldObservation(sim, {
+      kind: "healthcare",
+      source: "transaction",
+      summary: `${clinicTransactions.length} clinic payments happened today.`,
+      detail: clinicTransactions.some((entry) => entry.note.includes("could not afford"))
+        ? "At least one clinic visit could not be fully paid."
+        : "Clinic demand is showing up in the town ledger.",
+      buildingId: "clinic",
+      buildingName: "Clinic",
+      severity: clamp(clinicTransactions.length * 10, 16, 100),
+      confidence: 58,
+      tags: ["clinic", "healthcare", "money"],
+    });
+  }
+
+  const unemployedAdults = sim.citizens.filter((citizen) => !citizen.workplaceId && !citizen.schoolClass && citizen.lifeStage !== "child" && citizen.lifeStage !== "teen" && citizen.lifeStage !== "elder");
+  for (const citizen of unemployedAdults.slice(0, 8)) {
+    addWorldObservation(sim, {
+      kind: "employment",
+      source: "routine",
+      summary: `${citizen.name} does not have a stable workplace yet.`,
+      detail: `${citizen.name} is an adult without a workplace assignment.`,
+      citizenId: citizen.id,
+      citizenName: citizen.name,
+      householdId: citizen.householdId,
+      householdName: sim.households.find((household) => household.id === citizen.householdId)?.name,
+      severity: 42,
+      confidence: 50,
+      tags: ["work", "routine"],
+    });
+  }
+
+  if (sim.weather.kind === "rain" || sim.weather.kind === "fog") {
+    addWorldObservation(sim, {
+      kind: "weather",
+      source: "weather",
+      summary: `${sim.weather.kind} weather is changing how the town feels today.`,
+      detail: `The weather is ${sim.weather.kind} and ${sim.weather.temperature}F.`,
+      severity: sim.weather.kind === "rain" ? 35 : 24,
+      confidence: 70,
+      tags: ["weather", sim.weather.kind],
+    });
+  }
+
+  for (const building of BUILDINGS) {
+    const nearby = sim.citizens.filter((citizen) => Math.hypot(citizen.x - building.x, citizen.y - building.y) < 80);
+    if (nearby.length < 8) continue;
+    addWorldObservation(sim, {
+      kind: "movement",
+      source: "place",
+      summary: `Crowding is forming around ${building.name}.`,
+      detail: `${nearby.length} people are near ${building.name}.`,
+      buildingId: building.id,
+      buildingName: building.name,
+      severity: clamp(nearby.length * 6, 20, 100),
+      confidence: 48,
+      tags: ["crowding", building.kind],
+    });
+  }
+
+  rebuildWorldSignals(sim);
 }
 
 function detectCivicIssues(sim: SimulationState) {
@@ -1954,6 +2199,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
       updateHouseholdFinanceStatus(sim, household, members);
       for (const citizen of members) brainUpdateEmotionAndProblems(sim, citizen);
     }
+    detectWorldObservations(sim);
     detectCivicIssues(sim);
     addFeed(sim, `A new day begins with ${sim.weather.kind} weather around ${sim.weather.temperature}F.`);
   }
@@ -1964,6 +2210,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
 
   if (Math.floor(previousMinute / 120) !== Math.floor(sim.minute / 120)) {
     for (const citizen of sim.citizens) brainRefreshPersonalGoals(sim, citizen, addLifeJournal);
+    detectWorldObservations(sim);
     detectCivicIssues(sim);
   }
 
@@ -2000,6 +2247,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
   const citizenCash = sim.citizens.reduce((sum, citizen) => sum + citizen.cash, 0);
   const businessRevenue = ["market", "clinic"].reduce((sum, id) => sum + (sim.businessAccounts[id] ?? 0), 0);
   const majorDecisions = sim.worldDecisions.filter((decision) => decision.impact === "high" || decision.impact === "medium").length;
+  const activeSignals = sim.worldSignals.filter((signal) => signal.status === "watched" || signal.status === "strong").length;
   const activeIssues = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
   return {
     day: sim.day,
@@ -2012,6 +2260,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     townCash: Math.round(householdCash + citizenCash),
     businessRevenue: Math.round(businessRevenue),
     majorDecisions,
+    activeSignals,
     activeIssues,
   };
 }
