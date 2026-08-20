@@ -9,6 +9,7 @@ import { PeopleBrowser } from "./components/PeopleBrowser";
 import { PixiWorld } from "./components/PixiWorld";
 import { TransactionsBrowser } from "./components/TransactionsBrowser";
 import { WorldDecisionsBrowser } from "./components/WorldDecisionsBrowser";
+import { WorldSignalsBrowser } from "./components/WorldSignalsBrowser";
 import { useSimulation } from "./state/useSimulation";
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
   const [conversationsOpen, setConversationsOpen] = useState(false);
   const [transactionsOpen, setTransactionsOpen] = useState(false);
   const [worldDecisionsOpen, setWorldDecisionsOpen] = useState(false);
+  const [worldSignalsOpen, setWorldSignalsOpen] = useState(false);
   const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showRoutes, setShowRoutes] = useState(false);
@@ -65,6 +67,7 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
@@ -79,6 +82,7 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
@@ -93,6 +97,7 @@ export default function App() {
               setPeopleOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
@@ -107,6 +112,7 @@ export default function App() {
               setPeopleOpen(false);
               setConversationsOpen(false);
               setWorldDecisionsOpen(false);
+              setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
@@ -121,11 +127,27 @@ export default function App() {
               setPeopleOpen(false);
               setConversationsOpen(false);
               setTransactionsOpen(false);
+              setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
             {worldDecisionsOpen ? "Hide Decisions" : "Decisions"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWorldSignalsOpen((open) => !open);
+              setControlsOpen(false);
+              setPeopleOpen(false);
+              setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
+              setCivicIssuesOpen(false);
+              setSelectedBuildingId(null);
+            }}
+          >
+            {worldSignalsOpen ? "Hide Signals" : "Signals"}
           </button>
           <button
             type="button"
@@ -136,6 +158,7 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setWorldSignalsOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -227,6 +250,19 @@ export default function App() {
           </div>
         ) : null}
 
+        {worldSignalsOpen ? (
+          <div className="drawer drawer-center">
+            <WorldSignalsBrowser
+              sim={simulation.sim}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
+              onClose={() => setWorldSignalsOpen(false)}
+            />
+          </div>
+        ) : null}
+
         {civicIssuesOpen ? (
           <div className="drawer drawer-center">
             <CivicIssuesBrowser
@@ -256,6 +292,7 @@ export default function App() {
             setConversationsOpen(false);
             setTransactionsOpen(false);
             setWorldDecisionsOpen(false);
+            setWorldSignalsOpen(false);
             setCivicIssuesOpen(false);
           }}
         />

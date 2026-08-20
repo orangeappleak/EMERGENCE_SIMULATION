@@ -97,6 +97,31 @@ export type CivicIssueKind = "healthcare" | "money" | "employment" | "education"
 
 export type CivicIssueStatus = "watching" | "active" | "urgent" | "resolved";
 
+export type WorldObservationKind =
+  | "money"
+  | "healthcare"
+  | "employment"
+  | "education"
+  | "food"
+  | "governance"
+  | "movement"
+  | "weather"
+  | "social"
+  | "housing"
+  | "safety"
+  | "general";
+
+export type WorldObservationSource =
+  | "need"
+  | "conversation"
+  | "transaction"
+  | "routine"
+  | "weather"
+  | "authority"
+  | "place";
+
+export type WorldSignalStatus = "forming" | "watched" | "strong" | "promoted";
+
 export type CivicIssue = {
   id: string;
   kind: CivicIssueKind;
@@ -105,6 +130,43 @@ export type CivicIssue = {
   severity: number;
   awareness: number;
   affectedCitizenIds: string[];
+  evidence: string[];
+  firstSeenDay: number;
+  lastUpdatedDay: number;
+  lastUpdatedTime: string;
+};
+
+export type WorldObservation = {
+  id: string;
+  day: number;
+  time: string;
+  kind: WorldObservationKind;
+  source: WorldObservationSource;
+  summary: string;
+  detail: string;
+  citizenId?: string;
+  citizenName?: string;
+  householdId?: string;
+  householdName?: string;
+  buildingId?: string;
+  buildingName?: string;
+  severity: number;
+  confidence: number;
+  tags: string[];
+};
+
+export type WorldSignal = {
+  id: string;
+  kind: WorldObservationKind;
+  title: string;
+  status: WorldSignalStatus;
+  confidence: number;
+  severity: number;
+  maturity: number;
+  observationIds: string[];
+  affectedCitizenIds: string[];
+  relatedBuildingIds: string[];
+  tags: string[];
   evidence: string[];
   firstSeenDay: number;
   lastUpdatedDay: number;
@@ -369,6 +431,8 @@ export type SimulationState = {
   weather: WeatherState;
   totalConversations: number;
   worldDecisions: WorldDecision[];
+  worldObservations: WorldObservation[];
+  worldSignals: WorldSignal[];
   civicIssues: CivicIssue[];
   transactionLog: EconomyTransaction[];
   businessAccounts: Record<string, number>;
@@ -389,5 +453,6 @@ export type SimulationSnapshot = {
   townCash: number;
   businessRevenue: number;
   majorDecisions: number;
+  activeSignals: number;
   activeIssues: number;
 };
