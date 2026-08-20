@@ -1,17 +1,15 @@
 import type { AuthorityCheck, AuthorityEvent, Building, Citizen, CitizenIntention, CivicIssue, CivicIssueKind, CivicIssueStatus, ConversationClassification, ConversationEntry, ConversationTopic, DailyActivity, EconomyTransaction, FamilyRole, Household, LifeStage, PlaceSlot, RoutePoint, SimulationSnapshot, SimulationState, TransactionCategory, WeatherState, WorldDecision, WorldEvent, WorldObservation, WorldObservationKind, WorldSignal, WorldSignalStatus } from "../types/simulation";
 import {
-  chooseCitizenDecision as brainChooseCitizenDecision,
   chooseConversationTopic as brainChooseConversationTopic,
   classifyConversation as brainClassifyConversation,
   conversationText as brainConversationText,
-  currentObligation as brainCurrentObligation,
   emotionAfterConversation,
   refreshPersonalGoals as brainRefreshPersonalGoals,
-  thoughtFor as brainThoughtFor,
   totalMinute as brainTotalMinute,
   updateEmotionAndProblems as brainUpdateEmotionAndProblems,
   updateGoalProgress as brainUpdateGoalProgress,
 } from "./brain";
+import { chooseCitizenBrainDecision } from "./brainAdapter";
 import { BUILDINGS, FACTORY_RUMOR, PLACE_SLOTS, WALK_PIXELS_PER_SIM_MINUTE } from "./constants";
 import { clamp, mulberry32, pick } from "./random";
 import { formatTime } from "./time";
@@ -357,6 +355,7 @@ function createCitizen(
     currentIntention: "home",
     currentEmotion: mood < 45 ? "worried" : social < 45 ? "lonely" : energy < 50 ? "tired" : "calm",
     decisionReasoning: null,
+    brainDebug: null,
     goalFocus: "settle into the day",
     personalGoals: [],
     problems: lifeStage === "adult" && cash < 420 ? ["Money feels tight."] : [],
@@ -1824,7 +1823,6 @@ function setDestination(citizen: Citizen, destinationId: string, rand: () => num
 
 function updateSchedule(sim: SimulationState, citizen: Citizen) {
   const rand = mulberry32(sim.day * 10000 + sim.minute * 13 + Number(citizen.id.split("_")[1]));
-  const obligation = brainCurrentObligation(citizen, sim.minute, sim);
   const previousIntention = citizen.currentIntention;
   const tick = brainTotalMinute(sim);
   const distanceToTarget = Math.hypot(citizen.targetX - citizen.x, citizen.targetY - citizen.y);
@@ -1833,18 +1831,12 @@ function updateSchedule(sim: SimulationState, citizen: Citizen) {
     return;
   }
 
-  const decision = brainChooseCitizenDecision(sim, citizen, rand);
+  const decision = chooseCitizenBrainDecision(sim, citizen, rand);
   citizen.currentIntention = decision.intention;
   citizen.decisionReasoning = decision.reasoning;
-  citizen.currentThought = brainThoughtFor(citizen, decision.intention, decision.destinationId, obligation, sim);
-  const commitmentMinutes = decision.intention === "work" || decision.intention === "school"
-    ? 95
-    : decision.intention === "eat" || decision.intention === "errand"
-      ? 45
-      : decision.intention === "socialize" || decision.intention === "wander"
-        ? 55
-        : 35;
-  citizen.committedUntil = tick + commitmentMinutes;
+  citizen.brainDebug = decision.debug;
+  citizen.currentThought = decision.result.decision.thought;
+  citizen.committedUntil = tick + decision.result.decision.expectedMinutes;
   setDestination(citizen, decision.destinationId, rand, decision.intention);
   const actualIntention = decision.reasoning.authority.outcome === "guided" || decision.reasoning.authority.outcome === "blocked"
     ? decision.reasoning.alternatives[0]?.intention ?? decision.intention

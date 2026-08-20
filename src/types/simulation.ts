@@ -363,6 +363,7 @@ export type Citizen = {
   currentIntention: CitizenIntention;
   currentEmotion: CitizenEmotion;
   decisionReasoning: DecisionReasoning | null;
+  brainDebug: CitizenBrainDebug | null;
   goalFocus: string;
   personalGoals: PersonalGoal[];
   problems: string[];
@@ -488,6 +489,17 @@ export type CitizenBrainResult = {
   observations: CitizenBrainObservationDraft[];
   memories: string[];
   goalNotes: string[];
+};
+
+export type BrainAdapterMode = "scripted";
+
+export type CitizenBrainDebug = {
+  mode: BrainAdapterMode;
+  decidedAtDay: number;
+  decidedAtTime: string;
+  input: CitizenBrainContext;
+  output: CitizenBrainResult;
+  summary: string;
 };
 
 export type WorldEvent = {

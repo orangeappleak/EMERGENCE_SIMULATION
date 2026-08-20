@@ -252,6 +252,44 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
         </CollapsibleSection>
       ) : null}
 
+      {citizen.brainDebug ? (
+        <CollapsibleSection title="Brain Adapter" defaultOpen={false}>
+          <div className="reasoning-card">
+            <span>
+              {titleCase(citizen.brainDebug.mode)} mode · Day {citizen.brainDebug.decidedAtDay} {citizen.brainDebug.decidedAtTime}
+            </span>
+            <strong>{citizen.brainDebug.output.decision.thought}</strong>
+            <div className="decision-score-card">
+              <div>
+                <span>Output</span>
+                <strong>
+                  {titleCase(citizen.brainDebug.output.decision.intention)} · {citizen.brainDebug.output.decision.reason}
+                </strong>
+              </div>
+              <em>{citizen.brainDebug.output.decision.confidence}%</em>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-card">
+                <span>Allowed actions</span>
+                <strong>{citizen.brainDebug.input.constraints.allowedIntentions.map(titleCase).join(", ")}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Signals seen</span>
+                <strong>{citizen.brainDebug.input.localSignals.length}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Observations seen</span>
+                <strong>{citizen.brainDebug.input.recentObservations.length}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Authority</span>
+                <strong>{titleCase(citizen.brainDebug.input.constraints.authority.outcome)}</strong>
+              </div>
+            </div>
+          </div>
+        </CollapsibleSection>
+      ) : null}
+
       <CollapsibleSection title="Authority Events" count={citizen.recentAuthorityEvents.length}>
         <ul className="detail-list authority-event-list">
           {(citizen.recentAuthorityEvents.length ? citizen.recentAuthorityEvents : [{
