@@ -684,7 +684,42 @@ function addWorldDecision(sim: SimulationState, decision: Omit<WorldDecision, "i
   sim.worldDecisions = sim.worldDecisions.slice(0, 220);
 }
 
-function issueStatusFor(severity: number): CivicIssueStatus {
+const CIVIC_FIRST_VISIBLE_DAY: Record<CivicIssueKind, number> = {
+  money: 1,
+  healthcare: 2,
+  employment: 2,
+  food: 2,
+  education: 3,
+  governance: 4,
+};
+
+const CIVIC_ACTIVE_DAY: Record<CivicIssueKind, number> = {
+  money: 2,
+  healthcare: 3,
+  employment: 3,
+  food: 3,
+  education: 4,
+  governance: 5,
+};
+
+const CIVIC_URGENT_DAY: Record<CivicIssueKind, number> = {
+  money: 4,
+  healthcare: 5,
+  employment: 5,
+  food: 4,
+  education: 6,
+  governance: 7,
+};
+
+function civicIssueCanSurface(sim: SimulationState, kind: CivicIssueKind, force = false) {
+  return force || sim.day >= CIVIC_FIRST_VISIBLE_DAY[kind];
+}
+
+function issueStatusFor(sim: SimulationState, kind: CivicIssueKind, severity: number, force = false): CivicIssueStatus {
+  if (!force) {
+    if (sim.day < CIVIC_ACTIVE_DAY[kind]) return "watching";
+    if (sim.day < CIVIC_URGENT_DAY[kind]) return severity >= 42 ? "active" : "watching";
+  }
   if (severity >= 75) return "urgent";
   if (severity >= 42) return "active";
   return "watching";
@@ -695,7 +730,10 @@ function upsertCivicIssue(
   issue: Omit<CivicIssue, "firstSeenDay" | "lastUpdatedDay" | "lastUpdatedTime" | "status">,
 ) {
   const previous = sim.civicIssues.find((item) => item.id === issue.id);
-  const status = issueStatusFor(issue.severity);
+  const forceImmediate = issue.kind === "employment" && sim.factoryClosed;
+  if (!previous && !civicIssueCanSurface(sim, issue.kind, forceImmediate)) return;
+
+  const status = issueStatusFor(sim, issue.kind, issue.severity, forceImmediate);
   if (previous) {
     const previousStatus = previous.status;
     previous.title = issue.title;
@@ -730,6 +768,8 @@ function upsertCivicIssue(
     lastUpdatedDay: sim.day,
     lastUpdatedTime: formatTime(sim.minute),
   });
+  if (status === "watching") return;
+
   addWorldDecision(sim, {
     category: "civic",
     status: "automatic",
@@ -744,7 +784,7 @@ function upsertCivicIssue(
 }
 
 function hasCivicMaturity(citizen: Citizen) {
-  return citizen.lifeStage === "teen" || citizen.lifeStage === "adult" || citizen.lifeStage === "elder";
+  return citizen.lifeStage === "adult" || citizen.lifeStage === "elder";
 }
 
 function conversationHasCivicMaturity(sim: SimulationState, entry: ConversationEntry) {
@@ -785,7 +825,7 @@ function detectCivicIssues(sim: SimulationState) {
     });
   }
 
-  if (clinicTransactions >= 4 || clinicShortfalls > 0) {
+  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.healthcare && (clinicTransactions >= 4 || clinicShortfalls > 0)) {
     upsertCivicIssue(sim, {
       id: "clinic-access",
       kind: "healthcare",
@@ -802,7 +842,7 @@ function detectCivicIssues(sim: SimulationState) {
     });
   }
 
-  if (unemployed.length >= 3 || sim.factoryClosed) {
+  if (sim.factoryClosed || (sim.day >= CIVIC_FIRST_VISIBLE_DAY.employment && unemployed.length >= 3)) {
     upsertCivicIssue(sim, {
       id: "employment-gap",
       kind: "employment",
@@ -817,7 +857,7 @@ function detectCivicIssues(sim: SimulationState) {
     });
   }
 
-  if (lowFoodHouseholds.length >= 2) {
+  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.food && lowFoodHouseholds.length >= 2) {
     upsertCivicIssue(sim, {
       id: "food-security",
       kind: "food",
@@ -829,7 +869,7 @@ function detectCivicIssues(sim: SimulationState) {
     });
   }
 
-  if (schoolTrouble.length >= 3) {
+  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.education && schoolTrouble.length >= 3) {
     upsertCivicIssue(sim, {
       id: "school-strain",
       kind: "education",
@@ -841,7 +881,8 @@ function detectCivicIssues(sim: SimulationState) {
     });
   }
 
-  if (seriousTownTalk >= 8 || sim.civicIssues.filter((issue) => issue.status !== "resolved").length >= 3) {
+  const activeCivicPressure = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
+  if (sim.day >= CIVIC_FIRST_VISIBLE_DAY.governance && (seriousTownTalk >= 14 || activeCivicPressure >= 2)) {
     upsertCivicIssue(sim, {
       id: "governance-gap",
       kind: "governance",
@@ -1787,11 +1828,13 @@ function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: number) {
   addConversationEntry(sim, a, b, topic, classification, classificationReason, aText);
   addConversationEntry(sim, b, a, topic, classification, classificationReason, bText);
   addGlobalConversation(sim, a, b, topic, classification, classificationReason, `${aText} ${bText}`);
-  if (classification === "serious" || classification === "planning" || classification === "secretive") {
+  const shouldLogConversationDecision = classification === "secretive"
+    || (sim.day >= 2 && classification === "planning" && topic === "future plans");
+  if (shouldLogConversationDecision) {
     addWorldDecision(sim, {
       category: "social",
       status: "automatic",
-      impact: classification === "planning" ? "medium" : "low",
+      impact: "low",
       title: `${a.name} and ${b.name} had a ${classification} conversation`,
       summary: `${a.name} and ${b.name} talked about ${topic}.`,
       actorId: a.id,
