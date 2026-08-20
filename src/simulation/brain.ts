@@ -1,5 +1,6 @@
 import type {
   Citizen,
+  CitizenBrainContext,
   AuthorityCheck,
   DecisionReasoning,
   DecisionScore,
@@ -213,8 +214,27 @@ function evaluateAuthority(
   };
 }
 
-export function buildCitizenContext(sim: SimulationState, citizen: Citizen) {
+function allowedIntentionsFor(citizen: Citizen): CitizenIntention[] {
+  if (citizen.lifeStage === "child") return ["home", "school", "eat", "socialize", "wander", "sleep"];
+  if (citizen.lifeStage === "teen") return ["home", "school", "eat", "socialize", "wander", "recover", "sleep"];
+  if (citizen.lifeStage === "elder") return ["home", "eat", "socialize", "wander", "recover", "sleep", "errand"];
+  return ["home", "work", "eat", "errand", "socialize", "wander", "recover", "sleep"];
+}
+
+export function buildCitizenContext(sim: SimulationState, citizen: Citizen): CitizenBrainContext {
   const household = sim.households.find((item) => item.id === citizen.householdId);
+  const obligation = currentObligation(citizen, sim.minute, sim);
+  const authority: AuthorityCheck = {
+    expectedIntention: obligation,
+    expectedDestinationId: obligation === "school" ? "school" : obligation === "work" ? citizen.workplaceId : null,
+    authority: authorityFor(sim, citizen, obligation),
+    pressure: obligation ? 100 : 0,
+    resistance: 0,
+    outcome: obligation ? "guided" : "free",
+    reason: obligation
+      ? `The current ${obligation} obligation should be considered before choosing freely.`
+      : "No active school, work, or household rule is pushing against this choice.",
+  };
   const relationships = Object.entries(citizen.relationships)
     .map(([id, relationship]) => ({
       citizen: sim.citizens.find((item) => item.id === id),
@@ -279,6 +299,42 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen) {
     recentConversations: citizen.recentConversations.slice(0, 5),
     recentMemories: citizen.memories.slice(0, 5),
     lifeJournal: citizen.lifeJournal.slice(0, 5),
+    localSignals: sim.worldSignals
+      .filter((signal) => signal.status === "watched" || signal.status === "strong" || signal.status === "promoted")
+      .slice(0, 6)
+      .map((signal) => ({
+        id: signal.id,
+        kind: signal.kind,
+        title: signal.title,
+        status: signal.status,
+        confidence: signal.confidence,
+        severity: signal.severity,
+        maturity: signal.maturity,
+        evidence: signal.evidence,
+      })),
+    recentObservations: sim.worldObservations
+      .filter((observation) => (
+        observation.citizenId === citizen.id
+        || observation.householdId === citizen.householdId
+        || observation.buildingId === citizen.destinationId
+      ))
+      .slice(0, 8)
+      .map((observation) => ({
+        id: observation.id,
+        kind: observation.kind,
+        source: observation.source,
+        summary: observation.summary,
+        detail: observation.detail,
+        confidence: observation.confidence,
+        severity: observation.severity,
+        tags: observation.tags,
+      })),
+    constraints: {
+      allowedIntentions: allowedIntentionsFor(citizen),
+      authority,
+      canSpendAlone: citizen.lifeStage !== "child",
+      canConsiderCivicIssues: citizen.lifeStage === "adult" || citizen.lifeStage === "elder",
+    },
   };
 }
 

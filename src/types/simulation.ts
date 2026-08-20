@@ -415,6 +415,81 @@ export type Citizen = {
   };
 };
 
+export type CitizenBrainContext = {
+  time: {
+    day: number;
+    minute: number;
+  };
+  identity: Pick<Citizen, "id" | "name" | "age" | "lifeStage" | "familyRole" | "job" | "institutionRole" | "schoolClass">;
+  situation: {
+    home: string;
+    workplace: string | null;
+    destination: string;
+    currentSlot: string;
+    destinationSlot: string;
+    currentThought: string;
+    currentEmotion: CitizenEmotion;
+    currentIntention: CitizenIntention;
+    problems: string[];
+    knownFacts: string[];
+  };
+  personality: Citizen["personality"];
+  needs: Citizen["needs"];
+  goals: PersonalGoal[];
+  household: {
+    name: string;
+    rent: number;
+    sharedCash: number;
+    foodStock: number;
+    stress: number;
+  } | null;
+  progress: {
+    school: Citizen["schoolProgress"];
+    career: Citizen["careerProgress"];
+  };
+  relationships: Array<{
+    id: string;
+    name: string;
+    job: string;
+    friendship: number;
+    trust: number;
+    familiarity: number;
+  }>;
+  recentConversations: ConversationEntry[];
+  recentMemories: string[];
+  lifeJournal: LifeJournalEntry[];
+  localSignals: Array<Pick<WorldSignal, "id" | "kind" | "title" | "status" | "confidence" | "severity" | "maturity" | "evidence">>;
+  recentObservations: Array<Pick<WorldObservation, "id" | "kind" | "source" | "summary" | "detail" | "confidence" | "severity" | "tags">>;
+  constraints: {
+    allowedIntentions: CitizenIntention[];
+    authority: AuthorityCheck;
+    canSpendAlone: boolean;
+    canConsiderCivicIssues: boolean;
+  };
+};
+
+export type CitizenBrainDecision = {
+  intention: CitizenIntention;
+  destinationId: string;
+  destinationSlotId?: string;
+  thought: string;
+  reason: string;
+  confidence: number;
+  expectedMinutes: number;
+  conversationTargetId?: string;
+  spendingLimit?: number;
+  tags: string[];
+};
+
+export type CitizenBrainObservationDraft = Omit<WorldObservation, "id" | "day" | "time">;
+
+export type CitizenBrainResult = {
+  decision: CitizenBrainDecision;
+  observations: CitizenBrainObservationDraft[];
+  memories: string[];
+  goalNotes: string[];
+};
+
 export type WorldEvent = {
   id: string;
   day: number;
