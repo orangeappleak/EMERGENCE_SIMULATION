@@ -67,15 +67,27 @@ function chooseAiBridgeDecision(
     };
   }
 
-  requestAiDecision(citizen, input);
+  const requestState = requestAiDecision(citizen, input);
+  const fallbackResult: CitizenBrainResult = {
+    ...fallback.result,
+    decision: {
+      ...fallback.result.decision,
+      expectedMinutes: requestState === "error" ? 45 : 30,
+      tags: Array.from(new Set([...fallback.result.decision.tags, "ai-bridge", requestState])),
+    },
+  };
   return {
     ...fallback,
+    result: fallbackResult,
     debug: {
       ...fallback.debug,
       mode: "ai",
       source: "fallback",
       input,
-      summary: `${fallback.debug.summary} AI bridge fallback is active until a backend connector is configured.`,
+      output: fallbackResult,
+      summary: requestState === "error"
+        ? `${fallback.debug.summary} AI bridge hit an error and will retry later.`
+        : `${fallback.debug.summary} AI bridge fallback is active while a response is pending.`,
     },
   };
 }

@@ -9,6 +9,8 @@ type ReadyAiDecision = {
   result: CitizenBrainResult;
 };
 
+type AiBridgeRequestState = "requested" | "waiting" | "error";
+
 const pending = new Map<string, PendingAiRequest>();
 const ready = new Map<string, ReadyAiDecision>();
 const failures = new Map<string, string>();
@@ -29,7 +31,7 @@ export function takeReadyAiDecision(citizen: Citizen, context: CitizenBrainConte
   return cached.result;
 }
 
-export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext) {
+export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext): AiBridgeRequestState {
   const key = contextKey(context);
   const currentPending = pending.get(citizen.id);
   if (currentPending?.key === key) {
@@ -37,7 +39,7 @@ export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext
       state: "waiting",
       message: "Waiting for the local AI bridge response.",
     };
-    return;
+    return "waiting";
   }
 
   const failure = failures.get(citizen.id);
@@ -47,6 +49,7 @@ export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext
       message: failure,
     };
     failures.delete(citizen.id);
+    return "error";
   }
 
   pending.set(citizen.id, { key });
@@ -69,6 +72,10 @@ export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext
     })
     .then((result) => {
       ready.set(citizen.id, { key, result });
+      citizen.aiBrainStatus = {
+        state: "ready",
+        message: "AI bridge response arrived and will be used on the next decision check.",
+      };
     })
     .catch((error) => {
       failures.set(citizen.id, error instanceof Error ? error.message : "AI bridge request failed.");
@@ -77,6 +84,8 @@ export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext
       const active = pending.get(citizen.id);
       if (active?.key === key) pending.delete(citizen.id);
     });
+
+  return "requested";
 }
 
 export function markAiBridgeFallback(citizen: Citizen, context: CitizenBrainContext) {
