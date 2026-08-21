@@ -230,7 +230,27 @@ function allowedIntentionsFor(citizen: Citizen): CitizenIntention[] {
   return ["home", "work", "eat", "errand", "socialize", "wander", "recover", "sleep"];
 }
 
-export function buildCitizenContext(sim: SimulationState, citizen: Citizen): CitizenBrainContext {
+function destinationsForIntention(citizen: Citizen, intention: CitizenIntention) {
+  if (intention === "home" || intention === "sleep" || intention === "recover") return [citizen.homeId];
+  if (intention === "work") return citizen.workplaceId ? [citizen.workplaceId] : [];
+  if (intention === "school") return citizen.schoolClass || citizen.workplaceId === "school" ? ["school"] : [];
+  if (intention === "eat") return citizen.lifeStage === "child" ? [citizen.homeId] : ["market", citizen.homeId];
+  if (intention === "errand") return ["market", "clinic"];
+  if (intention === "socialize") return citizen.lifeStage === "child" ? [citizen.homeId, "school"] : ["market", "clinic", "school", citizen.homeId];
+  if (intention === "wander") return citizen.lifeStage === "child" ? [citizen.homeId, "school"] : ["market", "clinic", "school", citizen.homeId];
+  return [citizen.homeId];
+}
+
+function actionReason(citizen: Citizen, intention: CitizenIntention, destinationId: string) {
+  if (intention === "work") return "Work is only valid at their assigned workplace.";
+  if (intention === "school") return "School is valid for students and school staff.";
+  if (intention === "errand") return "Independent errands are limited by age and agency rules.";
+  if (intention === "eat" && destinationId === "market") return "The market can satisfy hunger when they can go there.";
+  if (intention === "home" || intention === "sleep" || intention === "recover") return "Home is the safe default for rest, recovery, and household life.";
+  return "This action is available under current life-stage and authority rules.";
+}
+
+export function buildCitizenContext(sim: SimulationState, citizen: Citizen, adapterMode: CitizenBrainContext["contract"]["adapterMode"] = "scripted"): CitizenBrainContext {
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const obligation = currentObligation(citizen, sim.minute, sim);
   const authority: AuthorityCheck = {
@@ -256,8 +276,25 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen): Cit
       return bScore - aScore;
     })
     .slice(0, 6);
+  const allowedIntentions = allowedIntentionsFor(citizen);
+  const availableActions = allowedIntentions.flatMap((intention) => (
+    destinationsForIntention(citizen, intention)
+      .filter((destinationId, index, destinations) => destinations.indexOf(destinationId) === index)
+      .map((destinationId) => ({
+        intention,
+        destinationId,
+        destinationName: buildingById(destinationId).name,
+        allowed: true,
+        reason: actionReason(citizen, intention, destinationId),
+      }))
+  ));
 
   return {
+    contract: {
+      version: "ai-brain-contract-v1",
+      adapterMode,
+      instruction: "Choose one available action, explain the thought briefly, and only propose observations or memories grounded in the supplied context.",
+    },
     time: { day: sim.day, minute: sim.minute },
     identity: {
       id: citizen.id,
@@ -297,6 +334,7 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen): Cit
       school: citizen.schoolProgress,
       career: citizen.careerProgress,
     },
+    availableActions,
     relationships: relationships.map((item) => ({
       id: item.citizen.id,
       name: item.citizen.name,
@@ -304,6 +342,9 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen): Cit
       friendship: item.relationship.friendship,
       trust: item.relationship.trust,
       familiarity: item.relationship.familiarity,
+      interactions: item.relationship.interactions,
+      lastTopic: item.relationship.lastTopic,
+      lastConversationSummary: item.relationship.lastConversationSummary,
     })),
     recentConversations: citizen.recentConversations.slice(0, 5),
     recentMemories: citizen.memories.slice(0, 5),
@@ -339,7 +380,7 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen): Cit
         tags: observation.tags,
       })),
     constraints: {
-      allowedIntentions: allowedIntentionsFor(citizen),
+      allowedIntentions,
       authority,
       canSpendAlone: citizen.lifeStage !== "child",
       canConsiderCivicIssues: citizen.lifeStage === "adult" || citizen.lifeStage === "elder",

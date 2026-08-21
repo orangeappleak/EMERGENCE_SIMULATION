@@ -328,6 +328,12 @@ export type LifeJournalEntry = {
   text: string;
 };
 
+export type ConversationDialogueLine = {
+  speakerId: string;
+  speakerName: string;
+  text: string;
+};
+
 export type ConversationEntry = {
   id: string;
   day: number;
@@ -352,6 +358,7 @@ export type ConversationEntry = {
   locationName?: string;
   locationSlotId?: string;
   locationSlotName?: string;
+  dialogue?: ConversationDialogueLine[];
   text: string;
 };
 
@@ -475,6 +482,11 @@ export type Citizen = {
 };
 
 export type CitizenBrainContext = {
+  contract: {
+    version: "ai-brain-contract-v1";
+    adapterMode: BrainAdapterMode;
+    instruction: string;
+  };
   time: {
     day: number;
     minute: number;
@@ -506,6 +518,13 @@ export type CitizenBrainContext = {
     school: Citizen["schoolProgress"];
     career: Citizen["careerProgress"];
   };
+  availableActions: Array<{
+    intention: CitizenIntention;
+    destinationId: string;
+    destinationName: string;
+    allowed: boolean;
+    reason: string;
+  }>;
   relationships: Array<{
     id: string;
     name: string;
@@ -513,6 +532,9 @@ export type CitizenBrainContext = {
     friendship: number;
     trust: number;
     familiarity: number;
+    interactions: number;
+    lastTopic?: ConversationTopic;
+    lastConversationSummary?: string;
   }>;
   recentConversations: ConversationEntry[];
   recentMemories: string[];
@@ -551,12 +573,20 @@ export type CitizenBrainResult = {
 
 export type BrainAdapterMode = "scripted";
 
+export type CitizenBrainValidation = {
+  valid: boolean;
+  warnings: string[];
+  repairedFields: string[];
+};
+
 export type CitizenBrainDebug = {
   mode: BrainAdapterMode;
+  contractVersion: "ai-brain-contract-v1";
   decidedAtDay: number;
   decidedAtTime: string;
   input: CitizenBrainContext;
   output: CitizenBrainResult;
+  validation: CitizenBrainValidation;
   summary: string;
 };
 

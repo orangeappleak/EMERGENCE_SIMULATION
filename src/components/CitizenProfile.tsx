@@ -262,7 +262,7 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
         <CollapsibleSection title="Brain Adapter" defaultOpen={false}>
           <div className="reasoning-card">
             <span>
-              {titleCase(citizen.brainDebug.mode)} mode · Day {citizen.brainDebug.decidedAtDay} {citizen.brainDebug.decidedAtTime}
+              {titleCase(citizen.brainDebug.mode)} mode · {citizen.brainDebug.contractVersion} · Day {citizen.brainDebug.decidedAtDay} {citizen.brainDebug.decidedAtTime}
             </span>
             <strong>{citizen.brainDebug.output.decision.thought}</strong>
             <div className="decision-score-card">
@@ -280,6 +280,10 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
                 <strong>{citizen.brainDebug.input.constraints.allowedIntentions.map(titleCase).join(", ")}</strong>
               </div>
               <div className="detail-card">
+                <span>Action options</span>
+                <strong>{citizen.brainDebug.input.availableActions.length}</strong>
+              </div>
+              <div className="detail-card">
                 <span>Signals seen</span>
                 <strong>{citizen.brainDebug.input.localSignals.length}</strong>
               </div>
@@ -291,7 +295,18 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
                 <span>Authority</span>
                 <strong>{titleCase(citizen.brainDebug.input.constraints.authority.outcome)}</strong>
               </div>
+              <div className="detail-card">
+                <span>Contract check</span>
+                <strong>{citizen.brainDebug.validation.valid ? "Valid" : `${citizen.brainDebug.validation.warnings.length} warnings`}</strong>
+              </div>
             </div>
+            {citizen.brainDebug.validation.warnings.length ? (
+              <ul className="detail-list">
+                {citizen.brainDebug.validation.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </CollapsibleSection>
       ) : null}
@@ -590,6 +605,13 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
               <button className="conversation-link" type="button" disabled={!entry.withId} onClick={() => entry.withId && onSelectCitizen(entry.withId)}>
                 <strong>{entry.withName} · {entry.topic} · {entry.classification}</strong>
                 <span>Day {entry.day} {entry.time}{entry.relationshipStage ? ` · ${titleCase(entry.relationshipStage)}` : ""}{entry.importance ? ` · ${entry.importance} importance` : ""}</span>
+                {entry.dialogue?.length ? (
+                  <span className="conversation-link-dialogue">
+                    {entry.dialogue.slice(0, 2).map((line) => (
+                      <small key={`${entry.id}-${line.speakerId}`}>{line.speakerName}: "{line.text}"</small>
+                    ))}
+                  </span>
+                ) : null}
                 <em>{entry.text}</em>
                 {entry.evidenceSummary ? <small>{entry.evidenceSummary}</small> : null}
                 {entry.classificationReason ? <small>{entry.classificationReason}</small> : null}

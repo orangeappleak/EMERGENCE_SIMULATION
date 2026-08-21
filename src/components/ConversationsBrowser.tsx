@@ -27,6 +27,7 @@ function matches(entry: ConversationEntry, query: string) {
     entry.aiUsefulness,
     entry.evidenceSummary,
     ...(entry.evidenceTags ?? []),
+    ...(entry.dialogue?.map((line) => `${line.speakerName} ${line.text}`) ?? []),
     entry.text,
   ].join(" ").toLowerCase();
   return text.includes(query);
@@ -34,6 +35,21 @@ function matches(entry: ConversationEntry, query: string) {
 
 function label(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function DialogueBlock({ entry }: { entry: ConversationEntry }) {
+  if (!entry.dialogue?.length) return <p>{entry.text}</p>;
+
+  return (
+    <div className="conversation-dialogue" aria-label="Conversation dialogue">
+      {entry.dialogue.map((line, index) => (
+        <p key={`${entry.id}-${line.speakerId}-${index}`}>
+          <strong>{line.speakerName}</strong>
+          <span>"{line.text}"</span>
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: ConversationsBrowserProps) {
@@ -132,7 +148,8 @@ export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: Conversa
                           {entry.withName}
                         </button>
                       </div>
-                      <p>{entry.text}</p>
+                      <DialogueBlock entry={entry} />
+                      {entry.dialogue?.length ? <p className="conversation-summary">{entry.text}</p> : null}
                       {entry.evidenceSummary ? <small>{entry.evidenceSummary}</small> : null}
                       {entry.evidenceTags?.length ? (
                         <div className="evidence-tags">
