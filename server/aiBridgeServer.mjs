@@ -1,8 +1,9 @@
 import http from "node:http";
 
 const port = Number(process.env.EMERGENCE_AI_PORT ?? 8787);
-const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
-const apiKey = process.env.OPENAI_API_KEY;
+const provider = process.env.AI_PROVIDER ?? "groq";
+const model = process.env.AI_MODEL
+  ?? (provider === "groq" ? "openai/gpt-oss-20b" : "gpt-4.1-mini");
 
 const decisionSchema = {
   type: "object",
@@ -86,6 +87,8 @@ function sendText(response, status, text) {
 }
 
 function extractOutputText(payload) {
+  const chatContent = payload.choices?.[0]?.message?.content;
+  if (typeof chatContent === "string") return chatContent;
   if (typeof payload.output_text === "string") return payload.output_text;
   for (const item of payload.output ?? []) {
     for (const content of item.content ?? []) {
@@ -93,6 +96,85 @@ function extractOutputText(payload) {
     }
   }
   return "";
+}
+
+function apiConfig() {
+  if (provider === "groq") {
+    return {
+      apiKey: process.env.GROQ_API_KEY,
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      missingKey: "GROQ_API_KEY is not set for the AI bridge server.",
+      body: (context) => ({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: brainPrompt(),
+          },
+          {
+            role: "user",
+            content: JSON.stringify(compactContext(context)),
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "citizen_brain_result",
+            strict: true,
+            schema: decisionSchema,
+          },
+        },
+      }),
+    };
+  }
+
+  return {
+    apiKey: process.env.OPENAI_API_KEY,
+    url: "https://api.openai.com/v1/responses",
+    missingKey: "OPENAI_API_KEY is not set for the AI bridge server.",
+    body: (context) => ({
+      model,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: brainPrompt(),
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: JSON.stringify(compactContext(context)),
+            },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "citizen_brain_result",
+          strict: true,
+          schema: decisionSchema,
+        },
+      },
+    }),
+  };
+}
+
+function brainPrompt() {
+  return [
+    "You are one citizen brain inside a life simulation.",
+    "Return only a JSON object that matches the schema.",
+    "Choose exactly one action from availableActions by matching intention and destinationId.",
+    "Do not invent world state, money, relationships, buildings, or civic facts.",
+    "Children cannot choose errands or spending.",
+    "Keep thoughts personal, grounded, and short.",
+  ].join(" ");
 }
 
 function compactContext(context) {
@@ -118,63 +200,25 @@ function compactContext(context) {
 }
 
 async function createCitizenDecision(context) {
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set for the AI bridge server.");
-  }
+  const config = apiConfig();
+  if (!config.apiKey) throw new Error(config.missingKey);
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch(config.url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${config.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text: [
-                "You are one citizen brain inside a life simulation.",
-                "Return only a JSON object that matches the schema.",
-                "Choose exactly one action from availableActions by matching intention and destinationId.",
-                "Do not invent world state, money, relationships, buildings, or civic facts.",
-                "Children cannot choose errands or spending.",
-                "Keep thoughts personal, grounded, and short.",
-              ].join(" "),
-            },
-          ],
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: JSON.stringify(compactContext(context)),
-            },
-          ],
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "citizen_brain_result",
-          strict: true,
-          schema: decisionSchema,
-        },
-      },
-    }),
+    body: JSON.stringify(config.body(context)),
   });
 
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? `OpenAI request failed with ${response.status}`);
+    throw new Error(payload.error?.message ?? `${provider} request failed with ${response.status}`);
   }
 
   const outputText = extractOutputText(payload);
-  if (!outputText) throw new Error("OpenAI returned no structured output text.");
+  if (!outputText) throw new Error(`${provider} returned no structured output text.`);
   return JSON.parse(outputText);
 }
 
@@ -209,5 +253,5 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`Emergence AI bridge listening on http://localhost:${port}`);
+  console.log(`Emergence AI bridge listening on http://localhost:${port} using ${provider}:${model}`);
 });
