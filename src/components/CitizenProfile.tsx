@@ -560,6 +560,14 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
                   <span>{item.citizen.name}</span>
                   <strong>{titleCase(item.stage)} · {item.relationship.interactions} talks</strong>
                   <small>friendship {Math.round(item.relationship.friendship)} · trust {Math.round(item.relationship.trust)}</small>
+                  {item.relationship.lastTopic ? (
+                    <small>
+                      Last: {titleCase(item.relationship.lastTopic)}
+                      {item.relationship.lastInteractionDay ? ` · day ${item.relationship.lastInteractionDay}` : ""}
+                      {item.relationship.lastContextZone ? ` · ${item.relationship.lastContextZone}` : ""}
+                    </small>
+                  ) : null}
+                  {item.relationship.lastConversationSummary ? <em>{item.relationship.lastConversationSummary}</em> : null}
                 </button>
               ) : null}
             </li>

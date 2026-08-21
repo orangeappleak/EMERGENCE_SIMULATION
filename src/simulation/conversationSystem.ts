@@ -197,6 +197,7 @@ function pickConversationTopic(sim: SimulationState, topics: ConversationTopic[]
 }
 
 function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen, context: ConversationContext, rand: () => number) {
+  const prior = speaker.relationships[listener.id];
   const morning = sim.minute < 11 * 60;
   const midday = sim.minute >= 11 * 60 && sim.minute < 15 * 60;
   const evening = sim.minute >= 17 * 60;
@@ -210,6 +211,16 @@ function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen
     `${speaker.name} checked in with ${listener.name} for a moment.`,
     `${speaker.name} and ${listener.name} talked about the ${weather} weather.`,
   ];
+  if (prior?.lastTopic && prior.interactions >= 2 && rand() < 0.45) {
+    if (prior.lastTopic === "daily life") lines.push(`${speaker.name} followed up with ${listener.name} after their last everyday check-in.`);
+    if (prior.lastTopic === "school") lines.push(`${speaker.name} asked ${listener.name} how school had gone since they last talked.`);
+    if (prior.lastTopic === "family") lines.push(`${speaker.name} asked ${listener.name} if things at home were still okay.`);
+    if (prior.lastTopic === "workplace gossip") lines.push(`${speaker.name} asked ${listener.name} whether work had settled down since their last chat.`);
+    if (prior.lastTopic === "future plans") lines.push(`${speaker.name} asked ${listener.name} whether they were still thinking about that future plan.`);
+    if (prior.lastTopic === "personal problem") lines.push(`${speaker.name} gently checked whether ${listener.name} was doing any better.`);
+    if (prior.lastTopic === "money stress") lines.push(`${speaker.name} quietly asked ${listener.name} if things felt any easier today.`);
+    if (prior.lastTopic === "rumor" || prior.lastTopic === "people gossip") lines.push(`${speaker.name} asked ${listener.name} if they had heard anything new.`);
+  }
   if (morning) {
     lines.push(
       `${speaker.name} asked ${listener.name} if they had eaten breakfast yet.`,
@@ -398,6 +409,14 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   reverse.firstMetDay = reverse.firstMetDay ?? sim.day;
   relationship.lastInteractionDay = sim.day;
   reverse.lastInteractionDay = sim.day;
+  relationship.lastTopic = plan.topic;
+  reverse.lastTopic = plan.topic;
+  relationship.lastClassification = plan.classification;
+  reverse.lastClassification = plan.classification;
+  relationship.lastContextZone = plan.contextZone;
+  reverse.lastContextZone = plan.contextZone;
+  relationship.lastConversationSummary = `${b.name}: ${plan.bText}`;
+  reverse.lastConversationSummary = `${a.name}: ${plan.aText}`;
 
   a.social = clamp(a.social + 8, 0, 100);
   b.social = clamp(b.social + 8, 0, 100);

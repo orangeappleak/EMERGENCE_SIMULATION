@@ -381,6 +381,20 @@ function createTownPopulation(): { households: Household[]; citizens: Citizen[] 
         interactions: seedHistory,
         firstMetDay: seedHistory > 0 ? 1 : undefined,
         lastInteractionDay: seedHistory > 0 ? 1 : undefined,
+        lastTopic: seedHistory > 0 ? "daily life" : undefined,
+        lastClassification: seedHistory > 0 ? "casual" : undefined,
+        lastContextZone: seedHistory > 0 ? (sameHousehold ? "home" : coworkers ? "work" : schoolLink ? "school" : undefined) : undefined,
+        lastConversationSummary: seedHistory > 0
+          ? family
+            ? "They already have ordinary household history together."
+            : sameHome
+              ? "They have shared casual moments around home."
+              : coworkers
+                ? "They have had light workplace check-ins before."
+                : schoolLink
+                  ? "They have had light school check-ins before."
+                  : undefined
+          : undefined,
       };
     }
   }

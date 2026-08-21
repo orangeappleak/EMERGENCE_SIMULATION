@@ -1450,12 +1450,13 @@ h3 {
 }
 
 .person-link {
-  align-items: center;
+  align-items: stretch;
   background: transparent;
   border: 0;
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  justify-content: space-between;
+  justify-content: center;
   min-height: 42px;
   padding: 9px;
   text-align: left;
@@ -1467,7 +1468,9 @@ h3 {
 }
 
 .person-link span,
-.person-link strong {
+.person-link strong,
+.person-link small,
+.person-link em {
   display: block;
   line-height: 1.25;
 }
@@ -1479,10 +1482,21 @@ h3 {
 
 .person-link strong {
   color: var(--muted);
-  flex: 0 0 auto;
   font-size: 11px;
   font-weight: 850;
-  text-align: right;
+}
+
+.person-link small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.person-link em {
+  color: #31383f;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
 }
 
 .muted {

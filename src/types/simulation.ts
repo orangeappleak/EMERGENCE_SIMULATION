@@ -63,7 +63,11 @@ export type Relationship = {
   interactions: number;
   firstMetDay?: number;
   lastInteractionDay?: number;
-};
+  lastTopic?: ConversationTopic;
+  lastClassification?: ConversationClassification;
+  lastContextZone?: "home" | "work" | "school" | "public" | "street";
+  lastConversationSummary?: string;
+  };
 
 export type LifeStage = "child" | "teen" | "adult" | "elder";
 
