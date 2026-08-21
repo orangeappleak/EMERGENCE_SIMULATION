@@ -15,6 +15,7 @@ import { addFeed, addLifeJournal, addWorldDecision } from "./eventLog";
 import { buildingById, homeStartSlot, isAtDestination, moveCitizen, setDestination } from "./movementSystem";
 import { clamp, mulberry32, pick } from "./random";
 import { formatTime } from "./time";
+import { detectWorldRequests } from "./worldRequestSystem";
 
 export { buildingById, placeSlotById } from "./movementSystem";
 
@@ -430,6 +431,7 @@ export function createSimulation(): SimulationState {
     worldObservations: [],
     townConcerns: [],
     worldSignals: [],
+    worldRequests: [],
     civicIssues: [],
     transactionLog: [],
     businessAccounts: {
@@ -713,6 +715,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     }
     detectWorldObservations(sim);
     detectCivicIssues(sim);
+    detectWorldRequests(sim);
     addFeed(sim, `A new day begins with ${sim.weather.kind} weather around ${sim.weather.temperature}F.`);
   }
 
@@ -724,6 +727,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     for (const citizen of sim.citizens) brainRefreshPersonalGoals(sim, citizen, addLifeJournal);
     detectWorldObservations(sim);
     detectCivicIssues(sim);
+    detectWorldRequests(sim);
   }
 
   const tick = sim.day * 1440 + sim.minute;
@@ -761,6 +765,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
   const majorDecisions = sim.worldDecisions.filter((decision) => decision.impact === "high" || decision.impact === "medium").length;
   const activeSignals = sim.worldSignals.filter((signal) => signal.status === "watched" || signal.status === "strong").length;
   const activeIssues = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
+  const pendingRequests = sim.worldRequests.filter((request) => request.status === "pending").length;
   return {
     day: sim.day,
     time: formatTime(sim.minute),
@@ -774,5 +779,6 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     majorDecisions,
     activeSignals,
     activeIssues,
+    pendingRequests,
   };
 }
