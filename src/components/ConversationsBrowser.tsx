@@ -153,7 +153,7 @@ export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: Conversa
                       {entry.evidenceSummary ? <small>{entry.evidenceSummary}</small> : null}
                       {entry.evidenceTags?.length ? (
                         <div className="evidence-tags">
-                          {entry.evidenceTags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}
+                          {entry.evidenceTags.slice(0, 8).map((tag) => <span key={tag}>{tag}</span>)}
                         </div>
                       ) : null}
                       {entry.classificationReason ? (
