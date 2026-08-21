@@ -1,5 +1,5 @@
 import type { Citizen, EconomyTransaction, Household, SimulationState, TransactionCategory } from "../types/simulation";
-import { totalMinute as brainTotalMinute } from "./brain";
+import { hasDiscoveredMoneyPressure, totalMinute as brainTotalMinute } from "./brain";
 import { BUILDINGS } from "./constants";
 import { addFeed, addLifeJournal, addWorldDecision } from "./eventLog";
 import { clamp } from "./random";
@@ -21,6 +21,10 @@ function transactionKey(category: TransactionCategory, buildingId = "town") {
 
 function adjustBusiness(sim: SimulationState, id: string, delta: number) {
   sim.businessAccounts[id] = Math.round((sim.businessAccounts[id] ?? 0) + delta);
+}
+
+function addProblemAwareness(citizen: Citizen, kind: keyof Citizen["problemAwareness"], amount = 1) {
+  citizen.problemAwareness[kind] = clamp(citizen.problemAwareness[kind] + amount, 0, 100);
 }
 
 function addTransaction(
@@ -77,6 +81,8 @@ export function payHouseholdCost(sim: SimulationState, household: Household, cat
   const shortfall = amount - paid;
   household.sharedCash -= paid;
   household.unpaidBills = Math.round(Math.max(0, household.unpaidBills + shortfall - (paid >= amount ? paid * 0.08 : 0)));
+  if (shortfall > 0) household.moneyFriction = clamp(household.moneyFriction + 1, 0, 100);
+  if (category === "living" && shortfall > 0) household.foodFriction = clamp(household.foodFriction + 0.5, 0, 100);
   household.stress = clamp(household.stress + (shortfall > 0 ? 5 + shortfall * 0.03 : -1), 0, 100);
   adjustBusiness(sim, "town", paid);
   addTransaction(sim, {
@@ -111,7 +117,8 @@ export function updateHouseholdFinanceStatus(sim: SimulationState, household: Ho
       ? `Money is tight with $${Math.round(household.sharedCash).toLocaleString()} shared and $${Math.round(household.unpaidBills).toLocaleString()} unpaid.`
       : `The household is keeping up with bills and has $${Math.round(household.sharedCash).toLocaleString()} shared.`;
 
-  if (previousStatus !== household.financialStatus && household.financialStatus !== "stable") {
+  const discoveredHouseholdPressure = sim.day > 1 && (household.moneyFriction >= 2 || household.unpaidBills > household.rent * 0.22 || household.financialStatus === "critical");
+  if (previousStatus !== household.financialStatus && household.financialStatus !== "stable" && discoveredHouseholdPressure) {
     addFeed(sim, `${household.name} is now financially ${household.financialStatus}.`);
     addWorldDecision(sim, {
       category: "economy",
@@ -129,8 +136,9 @@ export function updateHouseholdFinanceStatus(sim: SimulationState, household: Ho
     });
   }
 
-  if (household.financialStatus === "stable") return;
+  if (household.financialStatus === "stable" || !discoveredHouseholdPressure) return;
   for (const citizen of members) {
+    addProblemAwareness(citizen, "household", household.financialStatus === "critical" ? 2 : 1);
     citizen.mood = clamp(citizen.mood - (household.financialStatus === "critical" ? 2.4 : 1.1), 0, 100);
     citizen.needs.belonging = clamp(citizen.needs.belonging + (household.financialStatus === "critical" ? 3 : 1.2), 0, 100);
     citizen.problems = Array.from(new Set([
@@ -175,10 +183,15 @@ export function spendAtBuilding(sim: SimulationState, citizen: Citizen, building
   });
 
   if (paid < amount) {
+    addProblemAwareness(citizen, "money", 1);
+    if (category === "clinic") addProblemAwareness(citizen, "health", 1);
     citizen.mood = clamp(citizen.mood - 2.5, 0, 100);
-    citizen.problems = Array.from(new Set([...citizen.problems, "Money feels tight."]));
+    if (hasDiscoveredMoneyPressure(sim, citizen, household)) {
+      citizen.problems = Array.from(new Set([...citizen.problems, "Money feels tight."]));
+    }
   }
-  if (paid >= 25 || paid < amount) {
+  const discoveredMoneyPressure = hasDiscoveredMoneyPressure(sim, citizen, household);
+  if (paid >= 25 || (paid < amount && discoveredMoneyPressure)) {
     addWorldDecision(sim, {
       category: "economy",
       status: "automatic",
@@ -192,7 +205,7 @@ export function spendAtBuilding(sim: SimulationState, citizen: Citizen, building
       relatedBuildingId: building.id,
       requiresApproval: false,
       reason: note,
-      effect: paid < amount ? "The shortfall increased personal money pressure." : "Money moved from the citizen or household to a town business.",
+      effect: paid < amount ? "The shortfall became part of their discovered money pressure." : "Money moved from the citizen or household to a town business.",
     });
   }
   return paid;
@@ -221,8 +234,11 @@ export function payPersonalCost(sim: SimulationState, citizen: Citizen, amount: 
     note: paid < amount ? `${citizen.name} could not fully cover daily costs.` : `${citizen.name} covered daily personal costs.`,
   });
   if (paid < amount) {
+    addProblemAwareness(citizen, "money", 1);
     citizen.mood = clamp(citizen.mood - 2, 0, 100);
-    citizen.problems = Array.from(new Set([...citizen.problems, "Daily costs are hard to cover."]));
+    if (hasDiscoveredMoneyPressure(sim, citizen, sim.households.find((item) => item.id === citizen.householdId))) {
+      citizen.problems = Array.from(new Set([...citizen.problems, "Daily costs are hard to cover."]));
+    }
   }
 }
 

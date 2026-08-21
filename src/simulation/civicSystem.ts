@@ -100,6 +100,18 @@ function observationKindForTopic(topic: ConversationTopic): WorldObservationKind
   return "social";
 }
 
+function householdMoneyIsDiscovered(sim: SimulationState, household: SimulationState["households"][number]) {
+  return sim.day > 1 && (
+    household.moneyFriction >= 2
+    || household.unpaidBills > household.rent * 0.22
+    || household.financialStatus === "critical"
+  );
+}
+
+function householdFoodIsDiscovered(sim: SimulationState, household: SimulationState["households"][number]) {
+  return sim.day > 1 && (household.foodFriction >= 2 || household.foodStock < 25);
+}
+
 function signalTitle(kind: WorldObservationKind, buildingName?: string, householdName?: string) {
   if (buildingName) return `${buildingName} pattern`;
   if (householdName) return `${householdName} pattern`;
@@ -234,7 +246,7 @@ export function detectWorldObservations(sim: SimulationState) {
   for (const household of sim.households) {
     const members = sim.citizens.filter((citizen) => citizen.householdId === household.id);
     const adultMember = members.find(hasCivicMaturity);
-    if (household.financialStatus !== "stable" || household.unpaidBills > 0) {
+    if ((household.financialStatus !== "stable" || household.unpaidBills > 0) && householdMoneyIsDiscovered(sim, household)) {
       addWorldObservation(sim, {
         kind: "money",
         source: "need",
@@ -249,7 +261,7 @@ export function detectWorldObservations(sim: SimulationState) {
         tags: ["household", "money", household.financialStatus],
       });
     }
-    if (household.foodStock < 35) {
+    if (household.foodStock < 35 && householdFoodIsDiscovered(sim, household)) {
       addWorldObservation(sim, {
         kind: "food",
         source: "need",
@@ -413,17 +425,18 @@ export function detectCivicIssues(sim: SimulationState) {
     && conversationHasCivicMaturity(sim, entry)
   )).length;
 
-  if ((strainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) && concernCanPromoteIssue(sim, "money")) {
-    const affected = strainedHouseholds.flatMap((household) => household.memberIds);
+  const discoveredStrainedHouseholds = strainedHouseholds.filter((household) => householdMoneyIsDiscovered(sim, household));
+  if ((discoveredStrainedHouseholds.length > 0 || unpaidBills > 0 || moneyStressTalks > 3) && concernCanPromoteIssue(sim, "money")) {
+    const affected = discoveredStrainedHouseholds.flatMap((household) => household.memberIds);
     upsertCivicIssue(sim, {
       id: "money-strain",
       kind: "money",
       title: "Household financial strain",
-      severity: clamp(strainedHouseholds.length * 18 + unpaidBills * 0.02 + moneyStressTalks * 3, 20, 100),
-      awareness: clamp(moneyStressTalks * 9 + strainedHouseholds.length * 7, 8, 100),
+      severity: clamp(discoveredStrainedHouseholds.length * 18 + unpaidBills * 0.02 + moneyStressTalks * 3, 20, 100),
+      awareness: clamp(moneyStressTalks * 9 + discoveredStrainedHouseholds.length * 7, 8, 100),
       affectedCitizenIds: affected,
       evidence: [
-        `${strainedHouseholds.length} households are strained or critical.`,
+        `${discoveredStrainedHouseholds.length} households are strained or critical.`,
         `$${Math.round(unpaidBills).toLocaleString()} in unpaid household bills exists across town.`,
         `${moneyStressTalks} money-stress conversations happened today.`,
         ...concernEvidence(sim, "money"),
@@ -465,15 +478,16 @@ export function detectCivicIssues(sim: SimulationState) {
     });
   }
 
-  if (lowFoodHouseholds.length >= 2 && concernCanPromoteIssue(sim, "food")) {
+  const discoveredLowFoodHouseholds = lowFoodHouseholds.filter((household) => householdFoodIsDiscovered(sim, household));
+  if (discoveredLowFoodHouseholds.length >= 2 && concernCanPromoteIssue(sim, "food")) {
     upsertCivicIssue(sim, {
       id: "food-security",
       kind: "food",
       title: "Food security concern",
-      severity: clamp(lowFoodHouseholds.length * 16, 18, 100),
-      awareness: clamp(lowFoodHouseholds.length * 9 + moneyStressTalks * 2, 8, 100),
-      affectedCitizenIds: lowFoodHouseholds.flatMap((household) => household.memberIds),
-      evidence: [`${lowFoodHouseholds.length} households have low food stock.`, ...concernEvidence(sim, "food")],
+      severity: clamp(discoveredLowFoodHouseholds.length * 16, 18, 100),
+      awareness: clamp(discoveredLowFoodHouseholds.length * 9 + moneyStressTalks * 2, 8, 100),
+      affectedCitizenIds: discoveredLowFoodHouseholds.flatMap((household) => household.memberIds),
+      evidence: [`${discoveredLowFoodHouseholds.length} households have low food stock.`, ...concernEvidence(sim, "food")],
     });
   }
 

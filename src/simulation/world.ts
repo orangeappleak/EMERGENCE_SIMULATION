@@ -180,7 +180,13 @@ function createCitizen(
     brainDebug: null,
     goalFocus: "settle into the day",
     personalGoals: [],
-    problems: lifeStage === "adult" && cash < 420 ? ["Money feels tight."] : [],
+    problems: [],
+    problemAwareness: {
+      money: 0,
+      household: 0,
+      food: 0,
+      health: 0,
+    },
     recentAuthorityEvents: [],
     recentConversations: [],
     committedUntil: 0,
@@ -287,6 +293,8 @@ function createTownPopulation(): { households: Household[]; citizens: Citizen[] 
       stress: 20 + Math.round(rand() * 42),
       unpaidBills: 0,
       financialStatus: "stable",
+      moneyFriction: 0,
+      foodFriction: 0,
       lastMoneyNote: "The household is keeping up with bills.",
     };
 

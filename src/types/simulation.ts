@@ -366,7 +366,16 @@ export type Household = {
   stress: number;
   unpaidBills: number;
   financialStatus: "stable" | "strained" | "critical";
+  moneyFriction: number;
+  foodFriction: number;
   lastMoneyNote: string;
+};
+
+export type ProblemAwareness = {
+  money: number;
+  household: number;
+  food: number;
+  health: number;
 };
 
 export type Citizen = {
@@ -401,6 +410,7 @@ export type Citizen = {
   goalFocus: string;
   personalGoals: PersonalGoal[];
   problems: string[];
+  problemAwareness: ProblemAwareness;
   recentAuthorityEvents: AuthorityEvent[];
   recentConversations: ConversationEntry[];
   committedUntil: number;

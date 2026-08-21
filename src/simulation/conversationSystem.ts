@@ -1,5 +1,6 @@
 import type { Citizen, ConversationClassification, ConversationImportance, ConversationTopic, RelationshipStage, SimulationState } from "../types/simulation";
 import {
+  hasDiscoveredMoneyPressure,
   classifyConversation as brainClassifyConversation,
   conversationText as brainConversationText,
   emotionAfterConversation,
@@ -139,10 +140,13 @@ function canDiscussTopic(topic: ConversationTopic, stage: RelationshipStage, con
 }
 
 function possibleTopics(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, stage: RelationshipStage) {
+  const aHousehold = sim.households.find((household) => household.id === a.householdId);
+  const bHousehold = sim.households.find((household) => household.id === b.householdId);
+  const moneyDiscovered = hasDiscoveredMoneyPressure(sim, a, aHousehold) || hasDiscoveredMoneyPressure(sim, b, bHousehold);
   const options: ConversationTopic[] = ["daily life"];
   if (a.workplaceId && a.workplaceId === b.workplaceId) options.push("workplace gossip");
   if (a.problems.length || b.problems.length) options.push("personal problem");
-  if (a.cash < 180 || b.cash < 180 || a.problems.some((problem) => problem.toLowerCase().includes("money")) || b.problems.some((problem) => problem.toLowerCase().includes("money"))) options.push("money stress");
+  if (moneyDiscovered && (a.cash < 180 || b.cash < 180 || a.problems.some((problem) => problem.toLowerCase().includes("money")) || b.problems.some((problem) => problem.toLowerCase().includes("money")))) options.push("money stress");
   if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") options.push("family");
   if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") options.push("school");
   if (a.goalFocus || b.goalFocus) options.push("future plans");
