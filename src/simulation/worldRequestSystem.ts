@@ -1,5 +1,6 @@
 import type { Citizen, SimulationState, WorldDecisionImpact, WorldObservationKind, WorldRequest } from "../types/simulation";
-import { addFeed, addWorldDecision } from "./eventLog";
+import { addFeed, addLifeJournal, addWorldDecision } from "./eventLog";
+import { clamp } from "./random";
 import { formatTime } from "./time";
 
 function requestExists(sim: SimulationState, title: string, requestedById: string) {
@@ -105,6 +106,83 @@ export function detectWorldRequests(sim: SimulationState) {
   if (!sim.worldRequests.some((request) => request.status === "pending")) requestFromPersonalNeed(sim);
 }
 
+function requestKindToGoalKind(kind: WorldObservationKind) {
+  if (kind === "employment") return "career";
+  if (kind === "money" || kind === "food" || kind === "housing") return "money";
+  if (kind === "healthcare") return "wellbeing";
+  if (kind === "education") return "school";
+  if (kind === "social" || kind === "governance") return "friendship";
+  return "curiosity";
+}
+
+function affectedCitizens(sim: SimulationState, request: WorldRequest) {
+  return request.relatedCitizenIds
+    .map((id) => sim.citizens.find((citizen) => citizen.id === id))
+    .filter((citizen): citizen is Citizen => Boolean(citizen));
+}
+
+function addConsequenceGoal(sim: SimulationState, citizen: Citizen, request: WorldRequest) {
+  const title = request.kind === "employment"
+    ? "Turn an approved idea into income"
+    : `Help with ${request.title.toLowerCase()}`;
+  const existing = citizen.personalGoals.some((goal) => goal.title === title && goal.status === "active");
+  if (existing) return;
+
+  citizen.personalGoals.unshift({
+    id: `${citizen.id}-${sim.day}-${Math.round(sim.minute)}-request-follow-up`,
+    kind: requestKindToGoalKind(request.kind),
+    title,
+    reason: request.expectedEffect,
+    priority: request.impact === "high" ? 78 : request.impact === "medium" ? 62 : 48,
+    progress: 0,
+    status: "active",
+    createdDay: sim.day,
+  });
+  citizen.personalGoals = citizen.personalGoals.slice(0, 6);
+}
+
+function applyRequestConsequences(sim: SimulationState, request: WorldRequest, status: "approved" | "denied") {
+  const requester = sim.citizens.find((citizen) => citizen.id === request.requestedById);
+  const people = affectedCitizens(sim, request);
+  const notes: string[] = [];
+
+  if (status === "approved") {
+    if (requester) {
+      requester.mood = clamp(requester.mood + 5, 0, 100);
+      requester.social = clamp(requester.social + 3, 0, 100);
+      requester.currentEmotion = "hopeful";
+      requester.currentThought = "My request was approved. Now I need to turn it into something real.";
+      addConsequenceGoal(sim, requester, request);
+      addLifeJournal(sim, requester, `My request "${request.title}" was approved. I feel like the town is willing to listen.`);
+      notes.push(`${requester.name} feels supported and gained a follow-up goal.`);
+    }
+
+    people.forEach((citizen) => {
+      if (citizen.id === requester?.id) return;
+      citizen.mood = clamp(citizen.mood + 1.5, 0, 100);
+      citizen.problemAwareness.household = clamp(citizen.problemAwareness.household + 3, 0, 100);
+    });
+    if (people.length > 1) notes.push(`${people.length - 1} related citizen${people.length === 2 ? "" : "s"} became a little more aware that the town may respond.`);
+  } else {
+    if (requester) {
+      requester.mood = clamp(requester.mood - 5, 0, 100);
+      requester.social = clamp(requester.social - 2, 0, 100);
+      requester.currentEmotion = requester.mood < 40 ? "worried" : "tired";
+      requester.currentThought = "My request was denied. I need to rethink what to do next.";
+      addLifeJournal(sim, requester, `My request "${request.title}" was denied. I need another path.`);
+      notes.push(`${requester.name} feels discouraged and will need another way forward.`);
+    }
+
+    people.forEach((citizen) => {
+      if (citizen.id === requester?.id) return;
+      citizen.mood = clamp(citizen.mood - 0.8, 0, 100);
+    });
+    if (people.length > 1) notes.push(`${people.length - 1} related citizen${people.length === 2 ? "" : "s"} noticed the request was rejected.`);
+  }
+
+  return notes;
+}
+
 export function resolveWorldRequest(sim: SimulationState, requestIdToResolve: string, status: "approved" | "denied") {
   const request = sim.worldRequests.find((item) => item.id === requestIdToResolve);
   if (!request || request.status !== "pending") return;
@@ -115,8 +193,9 @@ export function resolveWorldRequest(sim: SimulationState, requestIdToResolve: st
   request.resolutionNote = status === "approved"
     ? "Approved by the player. The town can treat this as a real direction."
     : "Denied by the player. The town records the proposal, but it will not become a world change right now.";
+  request.consequences = applyRequestConsequences(sim, request, status);
 
-  addWorldDecision(sim, {
+  const resolutionDecision = addWorldDecision(sim, {
     category: request.kind === "employment" || request.kind === "money" || request.kind === "food" ? "economy" : "civic",
     status: status === "approved" ? "approved" : "rejected",
     impact: request.impact,
@@ -130,5 +209,26 @@ export function resolveWorldRequest(sim: SimulationState, requestIdToResolve: st
     reason: request.approvalReason,
     effect: request.resolutionNote,
   });
+
+  const followUpDecision = status === "approved"
+    ? addWorldDecision(sim, {
+        category: request.kind === "employment" || request.kind === "money" || request.kind === "food" ? "economy" : "civic",
+        status: "automatic",
+        impact: request.impact,
+        title: `Follow-up opened: ${request.title}`,
+        summary: request.expectedEffect,
+        actorId: request.requestedById,
+        actorName: request.requestedByName,
+        relatedCitizenIds: request.relatedCitizenIds,
+        relatedBuildingId: request.relatedBuildingIds[0],
+        requiresApproval: false,
+        reason: "An approved request should leave work for the town or citizen to pursue instead of ending at approval.",
+        effect: request.consequences.length
+          ? request.consequences.join(" ")
+          : "The approved request is now available as future simulation context.",
+      })
+    : null;
+
+  request.followUpDecisionIds = [resolutionDecision?.id, followUpDecision?.id].filter((id): id is string => Boolean(id));
   addFeed(sim, `${request.title} was ${status}.`);
 }

@@ -252,6 +252,8 @@ export type WorldRequest = {
   needs: string[];
   expectedEffect: string;
   approvalReason: string;
+  consequences?: string[];
+  followUpDecisionIds?: string[];
   resolvedDay?: number;
   resolvedTime?: string;
   resolutionNote?: string;
