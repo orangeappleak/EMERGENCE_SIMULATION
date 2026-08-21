@@ -582,7 +582,7 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
                       {item.relationship.lastContextZone ? ` · ${item.relationship.lastContextZone}` : ""}
                     </small>
                   ) : null}
-                  {item.relationship.lastConversationSummary ? <em>{item.relationship.lastConversationSummary}</em> : null}
+                  {item.relationship.lastConversationSummary ? <em>Remembered thread: {item.relationship.lastConversationSummary}</em> : null}
                 </button>
               ) : null}
             </li>
