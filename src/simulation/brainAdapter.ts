@@ -3,6 +3,7 @@ import type {
   Citizen,
   CitizenBrainDebug,
   CitizenBrainResult,
+  CitizenBrainValidation,
   DecisionReasoning,
   SimulationState,
 } from "../types/simulation";
@@ -39,7 +40,7 @@ function chooseScriptedBrainDecision(
   citizen: Citizen,
   rand: () => number,
 ): BrainAdapterDecision {
-  const input = buildCitizenContext(sim, citizen);
+  const input = buildCitizenContext(sim, citizen, "scripted");
   const scripted = chooseCitizenDecision(sim, citizen, rand);
   const obligation = currentObligation(citizen, sim.minute, sim);
   const thought = thoughtFor(citizen, scripted.intention, scripted.destinationId, obligation, sim);
@@ -63,6 +64,7 @@ function chooseScriptedBrainDecision(
     memories: [],
     goalNotes: [],
   };
+  const validation = validateBrainResult(input, result);
 
   return {
     intention: scripted.intention,
@@ -71,12 +73,51 @@ function chooseScriptedBrainDecision(
     result,
     debug: {
       mode: "scripted",
+      contractVersion: input.contract.version,
       decidedAtDay: sim.day,
       decidedAtTime: formatTime(sim.minute),
       input,
       output: result,
+      validation,
       summary: scripted.reasoning.summary,
     },
+  };
+}
+
+function validateBrainResult(input: ReturnType<typeof buildCitizenContext>, result: CitizenBrainResult): CitizenBrainValidation {
+  const warnings: string[] = [];
+  const repairedFields: string[] = [];
+  const decision = result.decision;
+  const matchingAction = input.availableActions.find((action) => (
+    action.intention === decision.intention && action.destinationId === decision.destinationId
+  ));
+
+  if (!input.constraints.allowedIntentions.includes(decision.intention)) {
+    warnings.push(`${decision.intention} is not in the allowed intention list.`);
+  }
+  if (!matchingAction) {
+    warnings.push(`${decision.destinationId} is not an available destination for ${decision.intention}.`);
+  }
+  if (!decision.thought.trim()) {
+    warnings.push("Decision thought was empty.");
+  }
+  if (!decision.reason.trim()) {
+    warnings.push("Decision reason was empty.");
+  }
+  if (decision.confidence < 0 || decision.confidence > 100) {
+    warnings.push("Decision confidence must stay between 0 and 100.");
+  }
+  if (input.identity.lifeStage === "child" && decision.intention === "errand") {
+    warnings.push("Children cannot choose independent errands.");
+  }
+  if (decision.spendingLimit !== undefined && !input.constraints.canSpendAlone) {
+    warnings.push("Spending was proposed for someone who cannot spend alone.");
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+    repairedFields,
   };
 }
 
