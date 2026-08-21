@@ -682,6 +682,68 @@ function conversationMemoryText(other: Citizen, plan: ConversationPlan, otherTex
   return `${other.name} and I had a ${plan.classification} ${plan.topic} conversation at ${place} as a ${stage}.`;
 }
 
+function followUpGoalKind(plan: ConversationPlan) {
+  if (plan.topic === "money stress") return "money";
+  if (plan.topic === "personal problem") return "wellbeing";
+  if (plan.topic === "future plans") return "curiosity";
+  if (plan.topic === "family") return "family";
+  return "friendship";
+}
+
+function addConversationFollowUpGoal(sim: SimulationState, citizen: Citizen, other: Citizen, plan: ConversationPlan) {
+  if (plan.importance === "low") return;
+
+  const kind = followUpGoalKind(plan);
+  const title = plan.topic === "future plans"
+    ? `Follow up with ${other.name} about their plans`
+    : plan.topic === "money stress"
+      ? `Check on ${other.name}'s money pressure`
+      : plan.topic === "personal problem"
+        ? `Check in on ${other.name}`
+        : `Keep building trust with ${other.name}`;
+  const existing = citizen.personalGoals.some((goal) => goal.title === title && goal.status === "active");
+  if (existing) return;
+
+  citizen.personalGoals.unshift({
+    id: `${citizen.id}_${other.id}_${sim.day}_${Math.round(sim.minute)}_${kind}`,
+    kind,
+    title,
+    reason: `${other.name} said something during a ${plan.classification} conversation that may matter later.`,
+    priority: plan.importance === "high" ? 78 : 58,
+    progress: 0,
+    status: "active",
+    createdDay: sim.day,
+  });
+  citizen.personalGoals = citizen.personalGoals.slice(0, 5);
+  addLifeJournal(sim, citizen, `I should remember to follow up with ${other.name}.`);
+}
+
+function applyConversationConsequences(sim: SimulationState, speaker: Citizen, listener: Citizen, plan: ConversationPlan) {
+  if (plan.classification === "supportive" || plan.topic === "personal problem") {
+    speaker.needs.belonging = clamp(speaker.needs.belonging - 10, 0, 100);
+    speaker.mood = clamp(speaker.mood + 4, 0, 100);
+    speaker.social = clamp(speaker.social + 6, 0, 100);
+    addConversationFollowUpGoal(sim, listener, speaker, plan);
+  }
+
+  if (plan.topic === "money stress") {
+    speaker.needs.belonging = clamp(speaker.needs.belonging - 6, 0, 100);
+    speaker.currentEmotion = "worried";
+    addConversationFollowUpGoal(sim, listener, speaker, plan);
+  }
+
+  if (plan.topic === "future plans") {
+    speaker.currentEmotion = "hopeful";
+    listener.currentEmotion = listener.currentEmotion === "worried" ? "hopeful" : listener.currentEmotion;
+    addConversationFollowUpGoal(sim, listener, speaker, plan);
+  }
+
+  if (plan.classification === "secretive") {
+    speaker.needs.belonging = clamp(speaker.needs.belonging - 4, 0, 100);
+    listener.currentEmotion = "curious";
+  }
+}
+
 export function knows(citizen: Citizen, fact: string) {
   return citizen.knownFacts.includes(fact);
 }
@@ -720,6 +782,14 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   reverse.familiarity = clamp(reverse.familiarity + delta, 0, 100);
   reverse.friendship = clamp(reverse.friendship + delta * 0.5 - reverse.dislike * 0.02, 0, 100);
   reverse.trust = clamp(reverse.trust + delta * 0.35, 0, 100);
+  if (plan.classification === "supportive" || plan.topic === "personal problem" || plan.topic === "money stress") {
+    relationship.trust = clamp(relationship.trust + 1.5, 0, 100);
+    reverse.trust = clamp(reverse.trust + 1.5, 0, 100);
+  }
+  if (plan.topic === "future plans") {
+    relationship.friendship = clamp(relationship.friendship + 1, 0, 100);
+    reverse.friendship = clamp(reverse.friendship + 1, 0, 100);
+  }
   relationship.interactions += 1;
   reverse.interactions += 1;
   relationship.firstMetDay = relationship.firstMetDay ?? sim.day;
@@ -770,6 +840,8 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   b.currentThought = `I keep thinking about what ${a.name} said.`;
   a.currentEmotion = emotionAfterConversation(plan.topic);
   b.currentEmotion = emotionAfterConversation(plan.topic);
+  applyConversationConsequences(sim, a, b, plan);
+  applyConversationConsequences(sim, b, a, plan);
 
   const aCanTell = knows(a, FACTORY_RUMOR) && !knows(b, FACTORY_RUMOR) && plan.topic === "rumor" && relationship.trust > 28;
   const bCanTell = knows(b, FACTORY_RUMOR) && !knows(a, FACTORY_RUMOR) && plan.topic === "rumor" && reverse.trust > 28;

@@ -293,7 +293,18 @@ export function buildCitizenContext(sim: SimulationState, citizen: Citizen, adap
     contract: {
       version: "ai-brain-contract-v1",
       adapterMode,
-      instruction: "Choose one available action, explain the thought briefly, and only propose observations or memories grounded in the supplied context.",
+      instruction: "Choose exactly one available action, explain the thought briefly, and only propose observations, memories, or goal notes grounded in the supplied context.",
+      outputSchema: {
+        requiredDecisionFields: ["intention", "destinationId", "thought", "reason", "confidence", "expectedMinutes", "tags"],
+        optionalChannels: ["observations", "memories", "goalNotes"],
+      },
+      guardrails: [
+        "The decision intention and destinationId must match one availableActions entry exactly.",
+        "Children cannot choose independent errands or spend money alone.",
+        "A citizen brain can propose observations, memories, and goal notes, but it cannot directly mutate money, buildings, issues, requests, or other citizens.",
+        "Civic, institutional, and economy-changing ideas must enter the world as grounded observations or requests for later approval.",
+        "Every claim must be grounded in the supplied context, recent observations, conversations, relationships, needs, or location.",
+      ],
     },
     time: { day: sim.day, minute: sim.minute },
     identity: {

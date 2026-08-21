@@ -64,61 +64,155 @@ function chooseScriptedBrainDecision(
     memories: [],
     goalNotes: [],
   };
-  const validation = validateBrainResult(input, result);
-
-  return {
+  const { result: guardedResult, validation } = guardBrainResult(input, result, {
     intention: scripted.intention,
     destinationId: scripted.destinationId,
+    thought,
+    reason: scripted.reasoning.summary,
+    confidence,
+    expectedMinutes,
+    tags: ["scripted", "fallback"],
+  });
+
+  return {
+    intention: guardedResult.decision.intention,
+    destinationId: guardedResult.decision.destinationId,
     reasoning: scripted.reasoning,
-    result,
+    result: guardedResult,
     debug: {
       mode: "scripted",
       contractVersion: input.contract.version,
       decidedAtDay: sim.day,
       decidedAtTime: formatTime(sim.minute),
       input,
-      output: result,
+      output: guardedResult,
       validation,
       summary: scripted.reasoning.summary,
     },
   };
 }
 
-function validateBrainResult(input: ReturnType<typeof buildCitizenContext>, result: CitizenBrainResult): CitizenBrainValidation {
+function guardBrainResult(
+  input: ReturnType<typeof buildCitizenContext>,
+  result: CitizenBrainResult,
+  fallbackDecision: CitizenBrainResult["decision"],
+): { result: CitizenBrainResult; validation: CitizenBrainValidation } {
   const warnings: string[] = [];
   const repairedFields: string[] = [];
-  const decision = result.decision;
+  const blockedFields: string[] = [];
+  const guarded: CitizenBrainResult = {
+    decision: { ...result.decision },
+    observations: result.observations.slice(0, 3),
+    memories: result.memories.slice(0, 3),
+    goalNotes: result.goalNotes.slice(0, 3),
+  };
+  const decision = guarded.decision;
   const matchingAction = input.availableActions.find((action) => (
     action.intention === decision.intention && action.destinationId === decision.destinationId
   ));
 
   if (!input.constraints.allowedIntentions.includes(decision.intention)) {
     warnings.push(`${decision.intention} is not in the allowed intention list.`);
+    repairedFields.push("decision.intention");
   }
   if (!matchingAction) {
     warnings.push(`${decision.destinationId} is not an available destination for ${decision.intention}.`);
+    repairedFields.push("decision.destinationId");
   }
-  if (!decision.thought.trim()) {
+
+  if (!input.constraints.allowedIntentions.includes(decision.intention) || !matchingAction) {
+    guarded.decision = { ...fallbackDecision };
+  }
+
+  if (!guarded.decision.thought.trim()) {
     warnings.push("Decision thought was empty.");
+    guarded.decision.thought = fallbackDecision.thought;
+    repairedFields.push("decision.thought");
   }
-  if (!decision.reason.trim()) {
+  if (!guarded.decision.reason.trim()) {
     warnings.push("Decision reason was empty.");
+    guarded.decision.reason = fallbackDecision.reason;
+    repairedFields.push("decision.reason");
   }
-  if (decision.confidence < 0 || decision.confidence > 100) {
+  const clampedConfidence = clamp(guarded.decision.confidence, 0, 100);
+  if (guarded.decision.confidence !== clampedConfidence) {
     warnings.push("Decision confidence must stay between 0 and 100.");
+    guarded.decision.confidence = clampedConfidence;
+    repairedFields.push("decision.confidence");
   }
-  if (input.identity.lifeStage === "child" && decision.intention === "errand") {
+  const clampedExpectedMinutes = clamp(guarded.decision.expectedMinutes, 5, 240);
+  if (guarded.decision.expectedMinutes !== clampedExpectedMinutes) {
+    warnings.push("Decision expectedMinutes must stay between 5 and 240.");
+    guarded.decision.expectedMinutes = clampedExpectedMinutes;
+    repairedFields.push("decision.expectedMinutes");
+  }
+  if (input.identity.lifeStage === "child" && guarded.decision.intention === "errand") {
     warnings.push("Children cannot choose independent errands.");
+    guarded.decision = { ...fallbackDecision };
+    repairedFields.push("decision");
   }
-  if (decision.spendingLimit !== undefined && !input.constraints.canSpendAlone) {
+  if (guarded.decision.spendingLimit !== undefined && !input.constraints.canSpendAlone) {
     warnings.push("Spending was proposed for someone who cannot spend alone.");
+    delete guarded.decision.spendingLimit;
+    blockedFields.push("decision.spendingLimit");
+  }
+
+  guarded.decision.thought = trimText(guarded.decision.thought, 180);
+  guarded.decision.reason = trimText(guarded.decision.reason, 240);
+  guarded.decision.tags = sanitizeTags(guarded.decision.tags);
+  guarded.observations = guarded.observations
+    .filter((observation) => observation.summary.trim() && observation.detail.trim())
+    .map((observation) => ({
+      ...observation,
+      summary: trimText(observation.summary, 140),
+      detail: trimText(observation.detail, 260),
+      confidence: clamp(observation.confidence, 0, 100),
+      severity: clamp(observation.severity, 0, 100),
+      tags: sanitizeTags(observation.tags),
+    }));
+  guarded.memories = guarded.memories
+    .map((memory) => trimText(memory, 180))
+    .filter(Boolean);
+  guarded.goalNotes = guarded.goalNotes
+    .map((note) => trimText(note, 180))
+    .filter(Boolean);
+
+  if (result.observations.length > guarded.observations.length) {
+    repairedFields.push("observations");
+  }
+  if (result.memories.length > guarded.memories.length) {
+    repairedFields.push("memories");
+  }
+  if (result.goalNotes.length > guarded.goalNotes.length) {
+    repairedFields.push("goalNotes");
   }
 
   return {
-    valid: warnings.length === 0,
-    warnings,
-    repairedFields,
+    result: guarded,
+    validation: {
+      valid: warnings.length === 0 && blockedFields.length === 0,
+      warnings,
+      repairedFields: Array.from(new Set(repairedFields)),
+      blockedFields: Array.from(new Set(blockedFields)),
+    },
   };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.round(Number.isFinite(value) ? value : min)));
+}
+
+function trimText(value: string, maxLength: number) {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength - 1).trim()}...`;
+}
+
+function sanitizeTags(tags: string[]) {
+  return Array.from(new Set(tags
+    .map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)))
+    .slice(0, 8);
 }
 
 function expectedCommitmentMinutes(intention: CitizenBrainResult["decision"]["intention"]) {
