@@ -674,40 +674,50 @@ export function chooseConversationTopic(sim: SimulationState, a: Citizen, b: Cit
   const aHousehold = sim.households.find((household) => household.id === a.householdId);
   const bHousehold = sim.households.find((household) => household.id === b.householdId);
   const moneyDiscovered = hasDiscoveredMoneyPressure(sim, a, aHousehold) || hasDiscoveredMoneyPressure(sim, b, bHousehold);
+  const relationship = a.relationships[b.id];
+  const interactions = Math.min(relationship?.interactions ?? 0, b.relationships[a.id]?.interactions ?? 0);
+  const earlyWarmup = sim.day <= 1 && sim.minute < 13 * 60;
   if (isYoungChild(a) || isYoungChild(b)) {
     const childOptions: ConversationTopic[] = ["daily life"];
     if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") childOptions.push("family");
     if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") childOptions.push("school");
-    if (a.problems.length || b.problems.length) childOptions.push("personal problem");
     return pick(rand, childOptions);
   }
 
-  const options: ConversationTopic[] = ["daily life", "future plans"];
-  if (a.workplaceId && a.workplaceId === b.workplaceId) options.push("workplace gossip");
-  if (a.problems.length || b.problems.length) options.push("personal problem");
-  if (moneyDiscovered && (personalMoneyPressure(a) > 0 || personalMoneyPressure(b) > 0)) options.push("money stress");
+  const options: ConversationTopic[] = ["daily life"];
+  if (earlyWarmup || interactions < 2) return "daily life";
+  if (a.workplaceId && a.workplaceId === b.workplaceId && interactions >= 3) options.push("workplace gossip");
+  if ((a.problems.length || b.problems.length) && (sim.day >= 2 || interactions >= 5)) options.push("personal problem");
+  if (moneyDiscovered && interactions >= 5 && (personalMoneyPressure(a) > 0 || personalMoneyPressure(b) > 0)) options.push("money stress");
   if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") options.push("family");
   if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") options.push("school");
-  if (a.knownFacts.includes(FACTORY_RUMOR) || b.knownFacts.includes(FACTORY_RUMOR)) options.push("rumor");
-  if (sim.citizens.length > 3) options.push("people gossip");
+  if ((a.goalFocus || b.goalFocus) && (sim.day >= 2 || interactions >= 4)) options.push("future plans");
+  if (sim.day >= 2 && (a.knownFacts.includes(FACTORY_RUMOR) || b.knownFacts.includes(FACTORY_RUMOR))) options.push("rumor");
+  if (sim.day >= 2 && interactions >= 4 && sim.citizens.length > 3) options.push("people gossip");
   return pick(rand, options);
 }
 
 export function conversationText(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, rand: () => number) {
   if (topic === "workplace gossip" && speaker.workplaceId) {
-    return `${speaker.name} talked about pressure at ${buildingById(speaker.workplaceId).name}.`;
+    return `${speaker.name} mentioned how the day was going at ${buildingById(speaker.workplaceId).name}.`;
   }
   if (topic === "people gossip") {
     const other = pick(rand, sim.citizens.filter((citizen) => citizen.id !== speaker.id && citizen.id !== listener.id));
     return `${speaker.name} wondered what ${other.name} has been dealing with lately.`;
   }
   if (topic === "money stress") return `${speaker.name} admitted that money has been on their mind.`;
-  if (topic === "family") return `${speaker.name} talked about trying to keep things steady at home.`;
+  if (topic === "family") return `${speaker.name} checked in about how things were going at home.`;
   if (topic === "school") return `${speaker.name} talked about school, teachers, and whether the day was going well.`;
-  if (topic === "future plans") return `${speaker.name} shared a future plan: ${speaker.goalFocus}.`;
+  if (topic === "future plans") return `${speaker.name} talked about something they might want to work toward later.`;
   if (topic === "personal problem") return `${speaker.name} opened up about ${speaker.problems[0]?.toLowerCase() ?? "having a hard day"}`;
   if (topic === "rumor") return `${speaker.name} brought up a rumor moving through town.`;
-  return `${speaker.name} and ${listener.name} talked about ordinary life in Northbridge.`;
+  const lines = [
+    `${speaker.name} asked ${listener.name} how their day was going.`,
+    `${speaker.name} asked ${listener.name} what they were doing today.`,
+    `${speaker.name} and ${listener.name} talked about ordinary life in Northbridge.`,
+    `${speaker.name} checked whether ${listener.name} had eaten yet.`,
+  ];
+  return pick(rand, lines);
 }
 
 export function classifyConversation(topic: ConversationTopic, speaker: Citizen, listener: Citizen): { classification: ConversationClassification; reason: string } {
@@ -720,8 +730,11 @@ export function classifyConversation(topic: ConversationTopic, speaker: Citizen,
   if (topic === "future plans") {
     return { classification: "planning", reason: "The conversation is about a goal or possible future direction." };
   }
-  if (topic === "family" || topic === "workplace gossip" || topic === "school") {
+  if (topic === "workplace gossip") {
     return { classification: "serious", reason: "The topic touches responsibilities, institutions, or household pressure." };
+  }
+  if (topic === "family" || topic === "school") {
+    return { classification: "casual", reason: "This is an ordinary check-in about home or school life." };
   }
   if (speaker.problems.length || listener.problems.length) {
     return { classification: "supportive", reason: "One of them is carrying an active problem into the exchange." };

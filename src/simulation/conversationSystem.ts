@@ -139,31 +139,110 @@ function canDiscussTopic(topic: ConversationTopic, stage: RelationshipStage, con
   return false;
 }
 
+function sharedInteractions(a: Citizen, b: Citizen) {
+  return Math.min(a.relationships[b.id]?.interactions ?? 0, b.relationships[a.id]?.interactions ?? 0);
+}
+
+function socialWarmupActive(sim: SimulationState, stage: RelationshipStage, context: ConversationContext, a: Citizen, b: Citizen) {
+  if (stage === "family" && context.zone === "home") return false;
+  if (sim.day <= 1 && sim.minute < 13 * 60) return true;
+  return sharedInteractions(a, b) < 2 && stage !== "family" && stage !== "authority";
+}
+
+function canShareDeeperTopic(sim: SimulationState, stage: RelationshipStage, context: ConversationContext, a: Citizen, b: Citizen, minimumInteractions: number) {
+  if (a.lifeStage === "child" || b.lifeStage === "child") return false;
+  if (socialWarmupActive(sim, stage, context, a, b)) return false;
+  if (stage === "family" || stage === "close") return sim.day >= 2 || sharedInteractions(a, b) >= 2;
+  if (stage === "friend") return sharedInteractions(a, b) >= minimumInteractions;
+  if (stage === "familiar") return sim.day >= 2 && sharedInteractions(a, b) >= minimumInteractions + 1;
+  return false;
+}
+
 function possibleTopics(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, stage: RelationshipStage) {
   const aHousehold = sim.households.find((household) => household.id === a.householdId);
   const bHousehold = sim.households.find((household) => household.id === b.householdId);
   const moneyDiscovered = hasDiscoveredMoneyPressure(sim, a, aHousehold) || hasDiscoveredMoneyPressure(sim, b, bHousehold);
   const options: ConversationTopic[] = ["daily life"];
-  if (a.workplaceId && a.workplaceId === b.workplaceId) options.push("workplace gossip");
-  if (a.problems.length || b.problems.length) options.push("personal problem");
-  if (moneyDiscovered && (a.cash < 180 || b.cash < 180 || a.problems.some((problem) => problem.toLowerCase().includes("money")) || b.problems.some((problem) => problem.toLowerCase().includes("money")))) options.push("money stress");
+  const warmup = socialWarmupActive(sim, stage, context, a, b);
+  if (a.workplaceId && a.workplaceId === b.workplaceId && !warmup && sharedInteractions(a, b) >= 3) options.push("workplace gossip");
+  if ((a.problems.length || b.problems.length) && canShareDeeperTopic(sim, stage, context, a, b, 4)) options.push("personal problem");
+  if (
+    moneyDiscovered
+    && canShareDeeperTopic(sim, stage, context, a, b, 5)
+    && (a.cash < 180 || b.cash < 180 || a.problems.some((problem) => problem.toLowerCase().includes("money")) || b.problems.some((problem) => problem.toLowerCase().includes("money")))
+  ) options.push("money stress");
   if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") options.push("family");
   if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") options.push("school");
-  if (a.goalFocus || b.goalFocus) options.push("future plans");
-  if (a.knownFacts.includes(FACTORY_RUMOR) || b.knownFacts.includes(FACTORY_RUMOR)) options.push("rumor");
-  if (sim.citizens.length > 3) options.push("people gossip");
+  if ((a.goalFocus || b.goalFocus) && canShareDeeperTopic(sim, stage, context, a, b, 3)) options.push("future plans");
+  if (sim.day >= 2 && !warmup && (a.knownFacts.includes(FACTORY_RUMOR) || b.knownFacts.includes(FACTORY_RUMOR))) options.push("rumor");
+  if (sim.day >= 2 && !warmup && sim.citizens.length > 3) options.push("people gossip");
   return options.filter((topic, index, topics) => (
     topics.indexOf(topic) === index && canDiscussTopic(topic, stage, context, a, b)
   ));
 }
 
-function conversationLine(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, stage: RelationshipStage, rand: () => number) {
+function pickConversationTopic(sim: SimulationState, topics: ConversationTopic[], stage: RelationshipStage, context: ConversationContext, a: Citizen, b: Citizen, rand: () => number) {
+  if (!topics.length) return "daily life";
+  if (topics.includes("daily life")) {
+    const ordinaryBias = socialWarmupActive(sim, stage, context, a, b)
+      ? 0.9
+      : sim.day <= 1
+        ? 0.72
+        : stage === "family" || stage === "close"
+          ? 0.42
+          : 0.56;
+    if (rand() < ordinaryBias) return "daily life";
+  }
+  return topics[Math.floor(rand() * topics.length)];
+}
+
+function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen, context: ConversationContext, rand: () => number) {
+  const morning = sim.minute < 11 * 60;
+  const midday = sim.minute >= 11 * 60 && sim.minute < 15 * 60;
+  const evening = sim.minute >= 17 * 60;
+  const weather = sim.weather.kind === "clear"
+    ? "nice out"
+    : sim.weather.kind === "rain"
+      ? "rainy out"
+      : `${sim.weather.kind} today`;
+  const lines = [
+    `${speaker.name} asked ${listener.name} how their day was going.`,
+    `${speaker.name} checked in with ${listener.name} for a moment.`,
+    `${speaker.name} and ${listener.name} talked about the ${weather} weather.`,
+  ];
+  if (morning) {
+    lines.push(
+      `${speaker.name} asked ${listener.name} if they had eaten breakfast yet.`,
+      `${speaker.name} asked ${listener.name} what they had planned for the morning.`,
+      `${speaker.name} and ${listener.name} talked about getting started for the day.`,
+    );
+  }
+  if (midday) {
+    lines.push(
+      `${speaker.name} asked ${listener.name} if lunch sounded good soon.`,
+      `${speaker.name} and ${listener.name} traded a quick midday check-in.`,
+    );
+  }
+  if (evening) {
+    lines.push(
+      `${speaker.name} asked ${listener.name} how the day had been.`,
+      `${speaker.name} and ${listener.name} talked about heading home and winding down.`,
+    );
+  }
+  if (context.zone === "work") lines.push(`${speaker.name} asked ${listener.name} how work was going so far.`);
+  if (context.zone === "school") lines.push(`${speaker.name} asked ${listener.name} how school was going today.`);
+  if (context.zone === "home") lines.push(`${speaker.name} checked whether ${listener.name} needed anything at home.`);
+  return lines[Math.floor(rand() * lines.length)];
+}
+
+function conversationLine(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, stage: RelationshipStage, context: ConversationContext, rand: () => number) {
   if (topic === "daily life" && stage === "stranger") {
     return `${speaker.name} introduced themselves to ${listener.name} and kept the conversation light.`;
   }
   if (topic === "daily life" && stage === "acquaintance") {
-    return `${speaker.name} made small talk with ${listener.name} while getting a little more familiar.`;
+    return dailyLifeLine(sim, speaker, listener, context, rand);
   }
+  if (topic === "daily life") return dailyLifeLine(sim, speaker, listener, context, rand);
   return brainConversationText(sim, speaker, listener, topic, rand);
 }
 
@@ -183,25 +262,25 @@ function evidenceTags(topic: ConversationTopic, classification: ConversationClas
 function evidenceSummary(topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen) {
   if (topic === "money stress") return `${a.name} and ${b.name} surfaced money pressure during a ${context.zone} conversation.`;
   if (topic === "personal problem") return `${a.name} and ${b.name} shared a personal pressure that may matter later.`;
-  if (topic === "future plans") return `${a.name} and ${b.name} compared future goals and possible next steps.`;
-  if (topic === "workplace gossip") return `${a.name} and ${b.name} talked about workplace pressure.`;
-  if (topic === "school") return `${a.name} and ${b.name} talked about school responsibilities.`;
-  if (topic === "family") return `${a.name} and ${b.name} talked about household stability.`;
+  if (topic === "future plans") return `${a.name} and ${b.name} talked about something they may want to do later.`;
+  if (topic === "workplace gossip") return `${a.name} and ${b.name} checked in about the workday.`;
+  if (topic === "school") return `${a.name} and ${b.name} checked in about school.`;
+  if (topic === "family") return `${a.name} and ${b.name} checked in about home life.`;
   if (classification === "secretive") return `${a.name} and ${b.name} exchanged information that may spread through trust.`;
   return `${a.name} and ${b.name} maintained an ordinary social tie.`;
 }
 
 function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, stage: RelationshipStage, rand: () => number): ConversationPlan {
   const topics = possibleTopics(sim, a, b, context, stage);
-  const topic = topics.length ? topics[Math.floor(rand() * topics.length)] : "daily life";
-  const aText = conversationLine(sim, a, b, topic, stage, rand);
-  const bText = conversationLine(sim, b, a, topic, stage, rand);
+  const topic = pickConversationTopic(sim, topics, stage, context, a, b, rand);
+  const aText = conversationLine(sim, a, b, topic, stage, context, rand);
+  const bText = conversationLine(sim, b, a, topic, stage, context, rand);
   const classified = brainClassifyConversation(topic, a, b);
-  const classification = topic === "daily life" && (stage === "stranger" || stage === "acquaintance")
+  const classification = topic === "daily life" || (topic === "family" && sim.day <= 1 && context.zone === "home")
     ? "casual"
     : classified.classification;
-  const classificationReason = topic === "daily life" && (stage === "stranger" || stage === "acquaintance")
-    ? "They are still building basic familiarity, so the exchange stays light."
+  const classificationReason = classification === "casual"
+    ? "They are still building ordinary familiarity, so the exchange stays light."
     : classified.reason;
   const location = conversationLocation(a, b);
   const importance = conversationImportance(topic, classification, a, b);
