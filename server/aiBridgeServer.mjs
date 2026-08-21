@@ -114,12 +114,7 @@ function apiConfig() {
           },
         ],
         response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "citizen_brain_result",
-            strict: true,
-            schema: decisionSchema,
-          },
+          type: "json_object",
         },
         max_completion_tokens: 320,
       }),
@@ -167,7 +162,8 @@ function apiConfig() {
 function brainPrompt() {
   return [
     "You are one citizen brain inside a life simulation.",
-    "Return only a JSON object that matches the schema.",
+    "Return only valid JSON with no markdown or extra text.",
+    "Use this exact top-level shape: {\"decision\":{\"intention\":\"work\",\"destinationId\":\"building_id\",\"thought\":\"short personal thought\",\"reason\":\"short grounded reason\",\"confidence\":80,\"expectedMinutes\":30,\"tags\":[\"ai\"]},\"observations\":[],\"memories\":[],\"goalNotes\":[]}.",
     "Choose exactly one action from availableActions by matching intention and destinationId.",
     "Do not invent world state, money, relationships, buildings, or civic facts.",
     "Children cannot choose errands or spending.",
