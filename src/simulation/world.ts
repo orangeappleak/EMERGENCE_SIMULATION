@@ -395,6 +395,7 @@ export function createSimulation(): SimulationState {
       effect: "Important citizen, household, and civic events will appear in the World Decisions panel.",
     }],
     worldObservations: [],
+    townConcerns: [],
     worldSignals: [],
     civicIssues: [],
     transactionLog: [],

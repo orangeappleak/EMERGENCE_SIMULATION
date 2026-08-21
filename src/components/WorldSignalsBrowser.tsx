@@ -78,24 +78,24 @@ export function WorldSignalsBrowser({ sim, onSelectCitizen, onClose }: WorldSign
     <aside className="panel world-signals-panel">
       <div className="panel-title-row">
         <div>
-          <h2>World Signals</h2>
-          <p className="muted">{strongCount} strong patterns forming</p>
+          <h2>Town Concerns</h2>
+          <p className="muted">{strongCount} strong concerns forming</p>
         </div>
         <div className="panel-title-actions">
           <span className="status-badge">{signals.length}</span>
-          <button className="panel-close" type="button" onClick={onClose} aria-label="Close world signals panel">Close</button>
+          <button className="panel-close" type="button" onClick={onClose} aria-label="Close town concerns panel">Close</button>
         </div>
       </div>
 
       <input
         className="people-search"
-        placeholder="Find signals, people, places, evidence..."
+        placeholder="Find concerns, people, places, evidence..."
         type="search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
 
-      <div className="filter-tabs" role="tablist" aria-label="Signal types">
+      <div className="filter-tabs" role="tablist" aria-label="Concern types">
         {KINDS.map((item) => (
           <button
             aria-selected={kind === item}
@@ -112,7 +112,7 @@ export function WorldSignalsBrowser({ sim, onSelectCitizen, onClose }: WorldSign
 
       <select value={status} onChange={(event) => setStatus(event.target.value as "all" | WorldSignalStatus)}>
         {STATUSES.map((item) => (
-          <option key={item} value={item}>{item === "all" ? "All signal strength" : label(item)}</option>
+          <option key={item} value={item}>{item === "all" ? "All concern strength" : label(item)}</option>
         ))}
       </select>
 
@@ -139,17 +139,17 @@ export function WorldSignalsBrowser({ sim, onSelectCitizen, onClose }: WorldSign
             <li className="empty-row">
               <div className="decision-entry-head">
                 <div>
-                  <strong>No matching signals</strong>
+                  <strong>No matching concerns</strong>
                   <span>Try changing the filters</span>
                 </div>
                 <em>Empty</em>
               </div>
-              <p>The town has not noticed a matching pattern yet.</p>
+              <p>The town has not noticed a matching concern yet.</p>
             </li>
           )}
         </ol>
 
-        <section className="workspace-detail" aria-label="Signal details">
+        <section className="workspace-detail" aria-label="Concern details">
           {selectedSignal ? (
             <>
               <div className="detail-heading">

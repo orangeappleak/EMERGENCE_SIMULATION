@@ -147,7 +147,7 @@ export default function App() {
               setSelectedBuildingId(null);
             }}
           >
-            {worldSignalsOpen ? "Hide Signals" : "Signals"}
+            {worldSignalsOpen ? "Hide Concerns" : "Concerns"}
           </button>
           <button
             type="button"
