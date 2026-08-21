@@ -453,6 +453,7 @@ export function createSimulation(): SimulationState {
 }
 
 function addMemory(sim: SimulationState, citizen: Citizen, text: string) {
+  if (citizen.memories.some((memory) => memory.endsWith(text))) return;
   citizen.memories.unshift(`Day ${sim.day}: ${text}`);
   citizen.memories = citizen.memories.slice(0, 8);
 }

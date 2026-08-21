@@ -353,6 +353,9 @@ function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen
     lines.push(`${speaker.name} and ${listener.name} kept the conversation simple and light.`);
   }
   if (prior?.lastTopic && prior.interactions >= 2 && rand() < 0.45) {
+    if (prior.lastConversationSummary && prior.lastTopic !== "daily life") {
+      lines.push(`${speaker.name} remembered their last talk with ${listener.name} and checked whether anything had changed.`);
+    }
     if (prior.lastTopic === "daily life") lines.push(`${speaker.name} followed up with ${listener.name} after their last everyday check-in.`);
     if (prior.lastTopic === "school") lines.push(`${speaker.name} asked ${listener.name} how school had gone since they last talked.`);
     if (prior.lastTopic === "family") lines.push(`${speaker.name} asked ${listener.name} if things at home were still okay.`);
@@ -409,6 +412,7 @@ type DialoguePair = {
 
 function dialoguePairs(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, context: ConversationContext, location: ConversationLocation) {
   const listenerFirst = firstName(listener);
+  const prior = speaker.relationships[listener.id];
   const place = location.building.name;
   const slot = location.slot.name.toLowerCase();
   const morning = sim.minute < 11 * 60;
@@ -441,6 +445,9 @@ function dialoguePairs(sim: SimulationState, speaker: Citizen, listener: Citizen
     if (context.zone === "home") pairs.push({ opener: `Hey ${listenerFirst}, do you need anything at home?`, reply: "I think I'm fine. I just wanted to check in." });
     if (location.building.kind === "market") pairs.push({ opener: `Hey ${listenerFirst}, what are you picking up?`, reply: "Just something quick. I got hungry." });
     if (location.building.kind === "clinic") pairs.push({ opener: `Hey ${listenerFirst}, have you been waiting long?`, reply: "A little. I just want to feel better." });
+    if (prior?.lastTopic && prior.interactions >= 2 && prior.lastTopic !== "daily life") {
+      pairs.push({ opener: `Hey ${listenerFirst}, I remembered what you said last time. Any update?`, reply: "A little. Thanks for asking instead of just moving on." });
+    }
   } else if (topic === "school") {
     pairs.push(
       { opener: `How's class going today, ${listenerFirst}?`, reply: "It's going okay. I'm trying to stay focused." },
@@ -654,6 +661,27 @@ function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, pla
   sim.conversationLog = sim.conversationLog.slice(0, 240);
 }
 
+function conversationMemoryText(other: Citizen, plan: ConversationPlan, otherText: string) {
+  const place = `${plan.location.building.name}${plan.location.slot.name ? `, ${plan.location.slot.name}` : ""}`;
+  const stage = plan.relationshipStage === "family" || plan.relationshipStage === "authority"
+    ? plan.relationshipStage
+    : `${plan.relationshipStage} relationship`;
+
+  if (plan.topic === "personal problem") {
+    return `${other.name} trusted me with a personal problem at ${place}. I remember: "${otherText}"`;
+  }
+  if (plan.topic === "money stress") {
+    return `${other.name} talked about money pressure at ${place}. I remember: "${otherText}"`;
+  }
+  if (plan.topic === "future plans") {
+    return `${other.name} shared a future plan at ${place}. I remember: "${otherText}"`;
+  }
+  if (plan.topic === "rumor" || plan.topic === "people gossip") {
+    return `${other.name} shared something sensitive at ${place}. I should be careful with that trust.`;
+  }
+  return `${other.name} and I had a ${plan.classification} ${plan.topic} conversation at ${place} as a ${stage}.`;
+}
+
 export function knows(citizen: Citizen, fact: string) {
   return citizen.knownFacts.includes(fact);
 }
@@ -756,8 +784,8 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
     addLifeJournal(sim, a, `${b.name} told me the factory might be in trouble.`);
     addFeed(sim, `${b.name} told ${a.name} the factory rumor.`);
   } else if (plan.shouldWriteMemory) {
-    addMemory(sim, a, `Talked with ${b.name} about ${plan.topic}. ${plan.evidenceSummary}`);
-    addMemory(sim, b, `Talked with ${a.name} about ${plan.topic}. ${plan.evidenceSummary}`);
+    addMemory(sim, a, conversationMemoryText(b, plan, plan.bText));
+    addMemory(sim, b, conversationMemoryText(a, plan, plan.aText));
     addLifeJournal(sim, a, plan.bText.replace(b.name, `I heard ${b.name}`));
     addLifeJournal(sim, b, plan.aText.replace(a.name, `I heard ${a.name}`));
   }
