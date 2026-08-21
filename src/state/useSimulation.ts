@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Citizen, SimulationState } from "../types/simulation";
 import { collapseFactory, createSimulation, seedRumor, snapshot, stepSimulation } from "../simulation/world";
+import { resolveWorldRequest } from "../simulation/worldRequestSystem";
 
 export function useSimulation() {
   const [, forceRender] = useState(0);
@@ -41,6 +42,10 @@ export function useSimulation() {
     },
     collapseFactory: () => {
       collapseFactory(simRef.current);
+      forceRender((value) => value + 1);
+    },
+    resolveWorldRequest: (requestId: string, status: "approved" | "denied") => {
+      resolveWorldRequest(simRef.current, requestId, status);
       forceRender((value) => value + 1);
     },
   };

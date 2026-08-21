@@ -36,6 +36,10 @@ export function MetricsBar({ summary }: MetricsBarProps) {
         <strong>{summary.majorDecisions}</strong>
       </div>
       <div>
+        <span>Pending Requests</span>
+        <strong>{summary.pendingRequests}</strong>
+      </div>
+      <div>
         <span>Active Signals</span>
         <strong>{summary.activeSignals}</strong>
       </div>

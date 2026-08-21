@@ -1207,6 +1207,7 @@ h3 {
 }
 
 .world-decisions-panel,
+.world-requests-panel,
 .world-signals-panel {
   gap: 12px;
 }
@@ -1218,6 +1219,7 @@ h3 {
 }
 
 .world-decision-list,
+.world-request-list,
 .world-signal-list {
   display: grid;
   gap: 10px;
@@ -1228,6 +1230,7 @@ h3 {
 }
 
 .world-decision-list li,
+.world-request-list li,
 .world-signal-list li {
   background: #f6f7f7;
   border: 1px solid #e5e8ea;
@@ -1248,6 +1251,18 @@ h3 {
 
 .world-decision-list li.decision-impact-low {
   border-left-color: var(--green);
+}
+
+.world-request-list li.request-status-pending {
+  border-left-color: var(--blue);
+}
+
+.world-request-list li.request-status-approved {
+  border-left-color: var(--green);
+}
+
+.world-request-list li.request-status-denied {
+  border-left-color: var(--red);
 }
 
 .world-signal-list li.signal-status-strong {
@@ -1305,6 +1320,7 @@ h3 {
 }
 
 .world-decision-list p,
+.world-request-list p,
 .world-signal-list p {
   color: #31383f;
   font-size: 13px;
@@ -1358,6 +1374,44 @@ h3 {
   font-size: 12px;
   min-height: 28px;
   padding: 0 9px;
+}
+
+.request-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.request-action-row button {
+  flex: 1 1 160px;
+}
+
+.request-action-row button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.approve-request {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.deny-request {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.inline-link-button {
+  background: transparent;
+  border: 0;
+  color: var(--blue);
+  display: inline;
+  font: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .civic-issues-panel {
