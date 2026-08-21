@@ -50,6 +50,9 @@ export function WorldProjectsBrowser({ sim, onSelectCitizen, onClose }: WorldPro
   const sourceDecision = selectedProject?.sourceDecisionId
     ? sim.worldDecisions.find((decision) => decision.id === selectedProject.sourceDecisionId)
     : undefined;
+  const projectOutcome = selectedProject?.outcomeId
+    ? sim.worldProjectOutcomes.find((outcome) => outcome.id === selectedProject.outcomeId)
+    : undefined;
 
   return (
     <aside className="panel world-projects-panel">
@@ -162,6 +165,18 @@ export function WorldProjectsBrowser({ sim, onSelectCitizen, onClose }: WorldPro
                   <p>{selectedProject.progress}% complete</p>
                 </div>
               </div>
+
+              {projectOutcome ? (
+                <div className="context-section">
+                  <h4>Outcome</h4>
+                  <div className="context-card">
+                    <span>Day {projectOutcome.day} {projectOutcome.time} · {label(projectOutcome.kind)}</span>
+                    <strong>{projectOutcome.title}</strong>
+                    <p>{projectOutcome.unlockedCapability}</p>
+                    <small>{projectOutcome.visibleLabel}</small>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="context-section">
                 <h4>Needs</h4>

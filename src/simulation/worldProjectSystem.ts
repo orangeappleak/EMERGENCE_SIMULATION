@@ -1,4 +1,4 @@
-import type { SimulationState, WorldProject, WorldRequest } from "../types/simulation";
+import type { SimulationState, WorldProject, WorldProjectOutcome, WorldProjectOutcomeKind, WorldRequest } from "../types/simulation";
 import { addFeed, addWorldDecision } from "./eventLog";
 import { clamp } from "./random";
 import { formatTime } from "./time";
@@ -45,6 +45,59 @@ function milestoneFor(project: WorldProject) {
   if (project.phase === "work") return "Citizens need to spend effort on the project.";
   if (project.phase === "ready") return "Ready for a future world or map change.";
   return "Completed and available as town history.";
+}
+
+function outcomeKindFor(project: WorldProject): WorldProjectOutcomeKind {
+  if (project.kind === "employment" || project.kind === "money" || project.kind === "food") return "enterprise";
+  if (project.kind === "governance" || project.kind === "social") return "town-capability";
+  if (project.kind === "healthcare" || project.kind === "education") return "service-improvement";
+  return "community-resource";
+}
+
+function outcomeTitleFor(project: WorldProject) {
+  if (project.kind === "employment") return "Local enterprise path unlocked";
+  if (project.kind === "governance") return "Town coordination capability unlocked";
+  if (project.kind === "healthcare") return "Care response capability improved";
+  if (project.kind === "education") return "Learning support capability improved";
+  if (project.kind === "housing") return "Housing response capability unlocked";
+  return `${project.title} outcome`;
+}
+
+function outcomeCapabilityFor(project: WorldProject) {
+  if (project.kind === "employment") return "Citizens can treat approved income experiments as future small-business or service opportunities.";
+  if (project.kind === "governance") return "Citizens can use this as precedent for organized town meetings and shared decisions.";
+  if (project.kind === "healthcare") return "Health-related concerns can use this completed work as evidence of better local care capacity.";
+  if (project.kind === "education") return "School and training concerns can use this completed work as evidence of stronger learning support.";
+  if (project.kind === "housing") return "Housing concerns can use this completed work as evidence that the town can organize shelter improvements.";
+  return "The town can refer back to this completed project as a real precedent.";
+}
+
+function createOutcomeForProject(sim: SimulationState, project: WorldProject) {
+  if (project.outcomeId) return null;
+
+  const outcome: WorldProjectOutcome = {
+    id: `${sim.day}-${Math.round(sim.minute)}-${sim.worldProjectOutcomes.length}-${project.kind}-${project.title}`,
+    day: sim.day,
+    time: formatTime(sim.minute),
+    kind: outcomeKindFor(project),
+    projectId: project.id,
+    title: outcomeTitleFor(project),
+    summary: project.summary,
+    sponsorId: project.sponsorId,
+    sponsorName: project.sponsorName,
+    relatedCitizenIds: project.relatedCitizenIds,
+    relatedBuildingIds: project.relatedBuildingIds,
+    visibleLabel: project.kind === "employment" ? "Prototype enterprise" : "Town capability",
+    unlockedCapability: outcomeCapabilityFor(project),
+    effect: project.expectedEffect,
+  };
+
+  sim.worldProjectOutcomes.unshift(outcome);
+  sim.worldProjectOutcomes = sim.worldProjectOutcomes.slice(0, 80);
+  project.outcomeId = outcome.id;
+  project.history.unshift(`Day ${sim.day} ${formatTime(sim.minute)}: Outcome unlocked - ${outcome.title}.`);
+  project.history = project.history.slice(0, 8);
+  return outcome;
 }
 
 export function createProjectFromRequest(sim: SimulationState, request: WorldRequest, sourceDecisionId?: string) {
@@ -115,11 +168,12 @@ export function advanceWorldProjects(sim: SimulationState) {
       project.phase = "complete";
       project.nextMilestone = "Completed and available as town history.";
       project.history.unshift(`Day ${sim.day} ${formatTime(sim.minute)}: Project completed.`);
+      const outcome = createOutcomeForProject(sim, project);
       addWorldDecision(sim, {
         category: project.kind === "employment" || project.kind === "money" || project.kind === "food" ? "economy" : "civic",
         status: "automatic",
         impact: project.impact,
-        title: `Project completed: ${project.title}`,
+        title: outcome ? `Project outcome unlocked: ${outcome.title}` : `Project completed: ${project.title}`,
         summary: project.summary,
         actorId: project.sponsorId,
         actorName: project.sponsorName,
@@ -127,9 +181,9 @@ export function advanceWorldProjects(sim: SimulationState) {
         relatedBuildingId: project.relatedBuildingIds[0],
         requiresApproval: false,
         reason: "The project gathered enough support, money, and effort to count as complete.",
-        effect: project.expectedEffect,
+        effect: outcome?.unlockedCapability ?? project.expectedEffect,
       });
-      addFeed(sim, `${project.title} is complete.`);
+      addFeed(sim, outcome ? `${outcome.title} came out of ${project.title}.` : `${project.title} is complete.`);
     }
   }
 }

@@ -434,6 +434,7 @@ export function createSimulation(): SimulationState {
     worldSignals: [],
     worldRequests: [],
     worldProjects: [],
+    worldProjectOutcomes: [],
     civicIssues: [],
     transactionLog: [],
     businessAccounts: {
@@ -771,6 +772,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
   const activeIssues = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
   const pendingRequests = sim.worldRequests.filter((request) => request.status === "pending").length;
   const activeProjects = sim.worldProjects.filter((project) => project.status === "active" || project.status === "blocked").length;
+  const projectOutcomes = sim.worldProjectOutcomes.length;
   return {
     day: sim.day,
     time: formatTime(sim.minute),
@@ -786,5 +788,6 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     activeIssues,
     pendingRequests,
     activeProjects,
+    projectOutcomes,
   };
 }

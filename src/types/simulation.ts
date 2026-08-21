@@ -116,6 +116,8 @@ export type WorldProjectStatus = "active" | "blocked" | "completed" | "canceled"
 
 export type WorldProjectPhase = "planning" | "resourcing" | "work" | "ready" | "complete";
 
+export type WorldProjectOutcomeKind = "enterprise" | "town-capability" | "service-improvement" | "community-resource";
+
 export type CivicIssueKind = "healthcare" | "money" | "employment" | "education" | "governance" | "food";
 
 export type CivicIssueStatus = "watching" | "active" | "urgent" | "resolved";
@@ -288,6 +290,24 @@ export type WorldProject = {
   nextMilestone: string;
   expectedEffect: string;
   history: string[];
+  outcomeId?: string;
+};
+
+export type WorldProjectOutcome = {
+  id: string;
+  day: number;
+  time: string;
+  kind: WorldProjectOutcomeKind;
+  projectId: string;
+  title: string;
+  summary: string;
+  sponsorId: string;
+  sponsorName: string;
+  relatedCitizenIds: string[];
+  relatedBuildingIds: string[];
+  visibleLabel: string;
+  unlockedCapability: string;
+  effect: string;
 };
 
 export type EconomyTransaction = {
@@ -669,6 +689,7 @@ export type SimulationState = {
   worldSignals: WorldSignal[];
   worldRequests: WorldRequest[];
   worldProjects: WorldProject[];
+  worldProjectOutcomes: WorldProjectOutcome[];
   civicIssues: CivicIssue[];
   transactionLog: EconomyTransaction[];
   businessAccounts: Record<string, number>;
@@ -693,4 +714,5 @@ export type SimulationSnapshot = {
   activeIssues: number;
   pendingRequests: number;
   activeProjects: number;
+  projectOutcomes: number;
 };
