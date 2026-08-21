@@ -21,6 +21,10 @@ function matches(entry: ConversationEntry, query: string) {
     entry.locationSlotName,
     entry.contextZone,
     entry.importance,
+    entry.intent,
+    entry.scope,
+    entry.tone,
+    entry.aiUsefulness,
     entry.evidenceSummary,
     ...(entry.evidenceTags ?? []),
     entry.text,
@@ -111,6 +115,14 @@ export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: Conversa
                         <strong>{entry.time}</strong>
                         <span>{entry.locationName}{entry.locationSlotName ? ` · ${entry.locationSlotName}` : ""}{entry.relationshipStage ? ` · ${label(entry.relationshipStage)}` : ""}{entry.importance ? ` · ${label(entry.importance)}` : ""}</span>
                       </div>
+                      {(entry.intent || entry.scope || entry.tone || entry.aiUsefulness) ? (
+                        <div className="conversation-signals">
+                          {entry.intent ? <span>{label(entry.intent)}</span> : null}
+                          {entry.scope ? <span>{label(entry.scope)}</span> : null}
+                          {entry.tone ? <span>{label(entry.tone)}</span> : null}
+                          {entry.aiUsefulness ? <span>AI {label(entry.aiUsefulness)}</span> : null}
+                        </div>
+                      ) : null}
                       <div className="conversation-people">
                         <button type="button" onClick={() => entry.speakerId && onSelectCitizen(entry.speakerId)}>
                           {entry.speakerName}

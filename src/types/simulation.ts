@@ -63,7 +63,11 @@ export type Relationship = {
   interactions: number;
   firstMetDay?: number;
   lastInteractionDay?: number;
-};
+  lastTopic?: ConversationTopic;
+  lastClassification?: ConversationClassification;
+  lastContextZone?: "home" | "work" | "school" | "public" | "street";
+  lastConversationSummary?: string;
+  };
 
 export type LifeStage = "child" | "teen" | "adult" | "elder";
 
@@ -78,6 +82,12 @@ export type ConversationTopic = "workplace gossip" | "people gossip" | "money st
 export type ConversationClassification = "casual" | "serious" | "secretive" | "supportive" | "planning";
 
 export type ConversationImportance = "low" | "medium" | "high";
+
+export type ConversationIntent = "greeting" | "check-in" | "follow-up" | "advice" | "complaint" | "planning" | "disclosure";
+
+export type ConversationScope = "personal" | "relationship" | "household" | "workplace" | "school" | "town";
+
+export type ConversationTone = "warm" | "neutral" | "tired" | "worried" | "hopeful";
 
 export type RelationshipStage = "stranger" | "acquaintance" | "familiar" | "friend" | "close" | "family" | "authority";
 
@@ -332,6 +342,10 @@ export type ConversationEntry = {
   contextZone?: "home" | "work" | "school" | "public" | "street";
   relationshipStage?: RelationshipStage;
   importance?: ConversationImportance;
+  intent?: ConversationIntent;
+  scope?: ConversationScope;
+  tone?: ConversationTone;
+  aiUsefulness?: ConversationImportance;
   evidenceSummary?: string;
   evidenceTags?: string[];
   locationId?: string;
