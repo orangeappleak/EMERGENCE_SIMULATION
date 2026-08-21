@@ -15,6 +15,7 @@ import { addFeed, addLifeJournal, addWorldDecision } from "./eventLog";
 import { buildingById, homeStartSlot, isAtDestination, moveCitizen, setDestination } from "./movementSystem";
 import { clamp, mulberry32, pick } from "./random";
 import { formatTime } from "./time";
+import { advanceWorldProjects } from "./worldProjectSystem";
 import { detectWorldRequests } from "./worldRequestSystem";
 
 export { buildingById, placeSlotById } from "./movementSystem";
@@ -432,6 +433,7 @@ export function createSimulation(): SimulationState {
     townConcerns: [],
     worldSignals: [],
     worldRequests: [],
+    worldProjects: [],
     civicIssues: [],
     transactionLog: [],
     businessAccounts: {
@@ -716,6 +718,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     detectWorldObservations(sim);
     detectCivicIssues(sim);
     detectWorldRequests(sim);
+    advanceWorldProjects(sim);
     addFeed(sim, `A new day begins with ${sim.weather.kind} weather around ${sim.weather.temperature}F.`);
   }
 
@@ -728,6 +731,7 @@ export function stepSimulation(sim: SimulationState, realMs: number) {
     detectWorldObservations(sim);
     detectCivicIssues(sim);
     detectWorldRequests(sim);
+    advanceWorldProjects(sim);
   }
 
   const tick = sim.day * 1440 + sim.minute;
@@ -766,6 +770,7 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
   const activeSignals = sim.worldSignals.filter((signal) => signal.status === "watched" || signal.status === "strong").length;
   const activeIssues = sim.civicIssues.filter((issue) => issue.status === "active" || issue.status === "urgent").length;
   const pendingRequests = sim.worldRequests.filter((request) => request.status === "pending").length;
+  const activeProjects = sim.worldProjects.filter((project) => project.status === "active" || project.status === "blocked").length;
   return {
     day: sim.day,
     time: formatTime(sim.minute),
@@ -780,5 +785,6 @@ export function snapshot(sim: SimulationState): SimulationSnapshot {
     activeSignals,
     activeIssues,
     pendingRequests,
+    activeProjects,
   };
 }

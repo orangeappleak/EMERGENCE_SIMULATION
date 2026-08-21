@@ -1208,6 +1208,7 @@ h3 {
 
 .world-decisions-panel,
 .world-requests-panel,
+.world-projects-panel,
 .world-signals-panel {
   gap: 12px;
 }
@@ -1220,6 +1221,7 @@ h3 {
 
 .world-decision-list,
 .world-request-list,
+.world-project-list,
 .world-signal-list {
   display: grid;
   gap: 10px;

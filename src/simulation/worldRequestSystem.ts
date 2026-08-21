@@ -2,6 +2,7 @@ import type { Citizen, SimulationState, WorldDecisionImpact, WorldObservationKin
 import { addFeed, addLifeJournal, addWorldDecision } from "./eventLog";
 import { clamp } from "./random";
 import { formatTime } from "./time";
+import { createProjectFromRequest } from "./worldProjectSystem";
 
 function requestExists(sim: SimulationState, title: string, requestedById: string) {
   return sim.worldRequests.some((request) => (
@@ -230,5 +231,14 @@ export function resolveWorldRequest(sim: SimulationState, requestIdToResolve: st
     : null;
 
   request.followUpDecisionIds = [resolutionDecision?.id, followUpDecision?.id].filter((id): id is string => Boolean(id));
+  if (status === "approved") {
+    const project = createProjectFromRequest(sim, request, followUpDecision?.id ?? resolutionDecision?.id);
+    if (project) {
+      request.consequences = [
+        ...(request.consequences ?? []),
+        `${project.title} became an active project with funding and labor needs.`,
+      ];
+    }
+  }
   addFeed(sim, `${request.title} was ${status}.`);
 }
