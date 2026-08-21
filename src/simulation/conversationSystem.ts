@@ -401,9 +401,13 @@ function firstName(citizen: Citizen) {
   return citizen.name.split(" ")[0];
 }
 
-function dialogueText(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, context: ConversationContext, location: ConversationLocation, rand: () => number, turn: "open" | "reply") {
+type DialoguePair = {
+  opener: string;
+  reply: string;
+};
+
+function dialoguePairs(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, context: ConversationContext, location: ConversationLocation) {
   const listenerFirst = firstName(listener);
-  const speakerFirst = firstName(speaker);
   const place = location.building.name;
   const slot = location.slot.name.toLowerCase();
   const morning = sim.minute < 11 * 60;
@@ -415,95 +419,97 @@ function dialogueText(sim: SimulationState, speaker: Citizen, listener: Citizen,
       ? "the weather"
       : `this ${sim.weather.kind} weather`;
 
-  const options: string[] = [];
+  const pairs: DialoguePair[] = [];
 
   if (topic === "daily life") {
-    if (turn === "open") {
-      options.push(
-        `Hey ${listenerFirst}, how's your day going?`,
-        `Hi ${listenerFirst}, are you doing okay today?`,
-        `Hey ${listenerFirst}, ${weather} is something today, right?`,
+    pairs.push(
+      { opener: `Hey ${listenerFirst}, how's your day going?`, reply: "I'm okay. Just taking the day one step at a time." },
+      { opener: `Hi ${listenerFirst}, are you doing okay today?`, reply: "Pretty normal so far. Nothing too strange yet." },
+      { opener: `Hey ${listenerFirst}, ${weather} is something today, right?`, reply: "Yeah, it definitely changes the mood around town." },
+    );
+    if (morning) {
+      pairs.push(
+        { opener: `Morning, ${listenerFirst}. Did you eat breakfast yet?`, reply: "Not yet. I should probably eat something soon." },
+        { opener: `Hey ${listenerFirst}, what are you trying to get done this morning?`, reply: "I want to get through the morning without falling behind." },
       );
-      if (morning) {
-        options.push(
-          `Morning, ${listenerFirst}. Did you eat breakfast yet?`,
-          `Hey ${listenerFirst}, what are you trying to get done this morning?`,
-        );
-      }
-      if (midday) options.push(`Hey ${listenerFirst}, are you thinking about lunch soon?`);
-      if (evening) options.push(`Hey ${listenerFirst}, how did the day treat you?`);
-      if (context.zone === "work") options.push(`Hey ${listenerFirst}, how's the shift going?`);
-      if (context.zone === "school") options.push(`Hey ${listenerFirst}, how's school going today?`);
-      if (context.zone === "home") options.push(`Hey ${listenerFirst}, do you need anything at home?`);
-      if (location.building.kind === "market") options.push(`Hey ${listenerFirst}, what are you picking up?`);
-      if (location.building.kind === "clinic") options.push(`Hey ${listenerFirst}, have you been waiting long?`);
-    } else {
-      options.push(
-        `I'm okay. Just taking the day one step at a time.`,
-        `Pretty normal so far. How about you, ${listenerFirst}?`,
-        `I'm doing alright. Just trying to keep moving.`,
-      );
-      if (morning) options.push(`Not yet. I should probably eat something soon.`);
-      if (midday) options.push(`Yeah, lunch sounds pretty good right now.`);
-      if (evening) options.push(`It was a lot, but I'm glad it's slowing down.`);
-      if (context.zone === "work") options.push(`Busy, but manageable. I'm trying to keep pace.`);
-      if (context.zone === "school") options.push(`It's okay. I'm trying to pay attention.`);
-      if (context.zone === "home") options.push(`I think I'm fine. I just wanted to check in.`);
-      if (location.building.kind === "market") options.push(`Just something quick. I got hungry.`);
-      if (location.building.kind === "clinic") options.push(`A little. I just want to feel better.`);
     }
+    if (midday) pairs.push({ opener: `Hey ${listenerFirst}, are you thinking about lunch soon?`, reply: "Yeah, lunch sounds pretty good right now." });
+    if (evening) pairs.push({ opener: `Hey ${listenerFirst}, how did the day treat you?`, reply: "It was a lot, but I'm glad it's slowing down." });
+    if (context.zone === "work") pairs.push({ opener: `Hey ${listenerFirst}, how's the shift going?`, reply: "Busy, but manageable. I'm trying to keep pace." });
+    if (context.zone === "school") pairs.push({ opener: `Hey ${listenerFirst}, how's school going today?`, reply: "It's okay. I'm trying to pay attention." });
+    if (context.zone === "home") pairs.push({ opener: `Hey ${listenerFirst}, do you need anything at home?`, reply: "I think I'm fine. I just wanted to check in." });
+    if (location.building.kind === "market") pairs.push({ opener: `Hey ${listenerFirst}, what are you picking up?`, reply: "Just something quick. I got hungry." });
+    if (location.building.kind === "clinic") pairs.push({ opener: `Hey ${listenerFirst}, have you been waiting long?`, reply: "A little. I just want to feel better." });
   } else if (topic === "school") {
-    options.push(...(turn === "open"
-      ? [`How's class going today, ${listenerFirst}?`, `Are you keeping up with school today?`, `What are you working on in class?`]
-      : [`It's going okay. I'm trying to stay focused.`, `Some of it makes sense. Some of it is hard.`, `I think I need a little more time with it.`]));
+    pairs.push(
+      { opener: `How's class going today, ${listenerFirst}?`, reply: "It's going okay. I'm trying to stay focused." },
+      { opener: "Are you keeping up with school today?", reply: "Some of it makes sense. Some of it is hard." },
+      { opener: "What are you working on in class?", reply: "Mostly the same lesson from earlier. I think I need a little more time with it." },
+    );
   } else if (topic === "family") {
-    options.push(...(turn === "open"
-      ? [`How is everyone at home doing?`, `Has home felt okay lately?`, `Did anything change around the house today?`]
-      : [`Mostly okay. I think everyone is just busy.`, `It has been alright, but I notice the little things.`, `Nothing huge. I just want home to feel steady.`]));
+    pairs.push(
+      { opener: "How is everyone at home doing?", reply: "Mostly okay. I think everyone is just busy." },
+      { opener: "Has home felt okay lately?", reply: "It has been alright, but I notice the little things." },
+      { opener: "Did anything change around the house today?", reply: "Nothing huge. I just want home to feel steady." },
+    );
   } else if (topic === "future plans") {
-    options.push(...(turn === "open"
-      ? [`I've been thinking about what I want to work toward next.`, `Do you ever think about what should change for us?`, `I have an idea for later, but I'm still sorting it out.`]
-      : [`That sounds worth thinking through.`, `Maybe start small and see what happens.`, `I get that. It helps to say it out loud.`]));
+    pairs.push(
+      { opener: "I've been thinking about what I want to work toward next.", reply: "That sounds worth thinking through." },
+      { opener: "Do you ever think about what should change for us?", reply: "Maybe. I think we should start small and see what happens." },
+      { opener: "I have an idea for later, but I'm still sorting it out.", reply: "I get that. It helps to say it out loud." },
+    );
   } else if (topic === "personal problem") {
-    options.push(...(turn === "open"
-      ? [`Can I tell you something that's been sitting with me?`, `I've had something on my mind today.`, `I don't want to make it a big thing, but I'm dealing with something.`]
-      : [`Yeah, I'm listening.`, `You can tell me. I won't make it weird.`, `That sounds heavy. I'm here for a minute.`]));
+    pairs.push(
+      { opener: "Can I tell you something that's been sitting with me?", reply: "Yeah, I'm listening." },
+      { opener: "I've had something on my mind today.", reply: "You can tell me. I won't make it weird." },
+      { opener: "I don't want to make it a big thing, but I'm dealing with something.", reply: "That sounds heavy. I'm here for a minute." },
+    );
   } else if (topic === "money stress") {
-    options.push(...(turn === "open"
-      ? [`I'm starting to worry about money a little.`, `Have things felt tight for you too?`, `I keep thinking about what everything costs.`]
-      : [`Yeah, I understand. It adds up fast.`, `That makes sense. It's hard not to notice.`, `Maybe we should pay attention before it gets worse.`]));
+    pairs.push(
+      { opener: "I'm starting to worry about money a little.", reply: "Yeah, I understand. It adds up fast." },
+      { opener: "Have things felt tight for you too?", reply: "A little. It's hard not to notice." },
+      { opener: "I keep thinking about what everything costs.", reply: "Maybe we should pay attention before it gets worse." },
+    );
   } else if (topic === "workplace gossip") {
-    options.push(...(turn === "open"
-      ? [`Have you noticed anything strange around ${place}?`, `Does work feel different to you lately?`, `Something about the ${slot} felt off today.`]
-      : [`I noticed it too, but I don't know what it means yet.`, `Maybe. I don't want to jump to conclusions.`, `Let's keep an eye on it.`]));
+    pairs.push(
+      { opener: `Have you noticed anything strange around ${place}?`, reply: "I noticed it too, but I don't know what it means yet." },
+      { opener: "Does work feel different to you lately?", reply: "Maybe. I don't want to jump to conclusions." },
+      { opener: `Something about the ${slot} felt off today.`, reply: "Let's keep an eye on it." },
+    );
   } else if (topic === "people gossip") {
-    options.push(...(turn === "open"
-      ? [`Have you noticed people acting different today?`, `People seem to be carrying a lot today.`, `I heard a few people talking earlier.`]
-      : [`I noticed that too.`, `Maybe we should be careful with what we repeat.`, `I don't know the whole story yet.`]));
+    pairs.push(
+      { opener: "Have you noticed people acting different today?", reply: "I noticed that too." },
+      { opener: "People seem to be carrying a lot today.", reply: "Maybe we should be careful with what we assume." },
+      { opener: "I heard a few people talking earlier.", reply: "I don't know the whole story yet." },
+    );
   } else if (topic === "rumor") {
-    options.push(...(turn === "open"
-      ? [`I heard something about Northbridge Works, but I'm not sure yet.`, `Can I trust you with something I heard?`, `There might be something going on at the factory.`]
-      : [`I won't spread it without knowing more.`, `That's worth being careful about.`, `Let's see if anyone else confirms it.`]));
+    pairs.push(
+      { opener: "I heard something about Northbridge Works, but I'm not sure yet.", reply: "I won't spread it without knowing more." },
+      { opener: "Can I trust you with something I heard?", reply: "Yes, but we should be careful with it." },
+      { opener: "There might be something going on at the factory.", reply: "Let's see if anyone else confirms it." },
+    );
   }
 
-  if (!options.length) {
-    options.push(turn === "open" ? `Hey ${listenerFirst}, can we talk for a second?` : `Sure, what's going on?`);
+  if (!pairs.length) {
+    pairs.push({ opener: `Hey ${listenerFirst}, can we talk for a second?`, reply: "Sure, what's going on?" });
   }
 
-  return options[Math.floor(rand() * options.length)];
+  return pairs;
 }
 
 function createDialogue(sim: SimulationState, a: Citizen, b: Citizen, topic: ConversationTopic, context: ConversationContext, location: ConversationLocation, rand: () => number): ConversationDialogueLine[] {
+  const pairs = dialoguePairs(sim, a, b, topic, context, location);
+  const pair = pairs[Math.floor(rand() * pairs.length)];
   return [
     {
       speakerId: a.id,
       speakerName: a.name,
-      text: dialogueText(sim, a, b, topic, context, location, rand, "open"),
+      text: pair.opener,
     },
     {
       speakerId: b.id,
       speakerName: b.name,
-      text: dialogueText(sim, b, a, topic, context, location, rand, "reply"),
+      text: pair.reply,
     },
   ];
 }
