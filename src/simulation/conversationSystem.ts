@@ -169,9 +169,9 @@ export function relationshipStage(a: Citizen, b: Citizen): RelationshipStage {
     + relationship.friendship * 0.24
     + relationship.interactions * 3
     - relationship.dislike * 0.35;
-  if (relationship.interactions >= 9 && relationship.trust >= 68 && relationship.friendship >= 58) return "close";
-  if (relationship.interactions >= 5 && score >= 54) return "friend";
-  if (relationship.interactions >= 2 && score >= 34) return "familiar";
+  if (relationship.interactions >= 14 && relationship.trust >= 72 && relationship.friendship >= 64) return "close";
+  if (relationship.interactions >= 7 && score >= 62) return "friend";
+  if (relationship.interactions >= 3 && score >= 42) return "familiar";
   if (relationship.interactions >= 1 || relationship.familiarity >= 18) return "acquaintance";
   return "stranger";
 }
@@ -201,9 +201,10 @@ function socialWarmupActive(sim: SimulationState, stage: RelationshipStage, cont
 function canShareDeeperTopic(sim: SimulationState, stage: RelationshipStage, context: ConversationContext, a: Citizen, b: Citizen, minimumInteractions: number) {
   if (a.lifeStage === "child" || b.lifeStage === "child") return false;
   if (socialWarmupActive(sim, stage, context, a, b)) return false;
-  if (stage === "family" || stage === "close") return sim.day >= 2 || sharedInteractions(a, b) >= 2;
+  if (sim.day < 2) return false;
+  if (stage === "family" || stage === "close") return true;
   if (stage === "friend") return sharedInteractions(a, b) >= minimumInteractions;
-  if (stage === "familiar") return sim.day >= 2 && sharedInteractions(a, b) >= minimumInteractions + 1;
+  if (stage === "familiar") return sharedInteractions(a, b) >= minimumInteractions + 1;
   return false;
 }
 
@@ -213,7 +214,7 @@ function possibleTopics(sim: SimulationState, a: Citizen, b: Citizen, context: C
   const moneyDiscovered = hasDiscoveredMoneyPressure(sim, a, aHousehold) || hasDiscoveredMoneyPressure(sim, b, bHousehold);
   const options: ConversationTopic[] = ["daily life"];
   const warmup = socialWarmupActive(sim, stage, context, a, b);
-  if (a.workplaceId && a.workplaceId === b.workplaceId && !warmup && sharedInteractions(a, b) >= 3) options.push("workplace gossip");
+  if (sim.day >= 2 && a.workplaceId && a.workplaceId === b.workplaceId && !warmup && sharedInteractions(a, b) >= 3) options.push("workplace gossip");
   if ((a.problems.length || b.problems.length) && canShareDeeperTopic(sim, stage, context, a, b, 4)) options.push("personal problem");
   if (
     moneyDiscovered
@@ -514,12 +515,14 @@ function createDialogue(sim: SimulationState, a: Citizen, b: Citizen, topic: Con
   ];
 }
 
-function evidenceTags(sim: SimulationState, topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen, location: ConversationLocation) {
-  const tags = new Set<string>([topic, classification, context.zone, location.building.kind]);
+function evidenceTags(sim: SimulationState, topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, stage: RelationshipStage, a: Citizen, b: Citizen, location: ConversationLocation) {
+  const tags = new Set<string>([topic, classification, context.zone, location.building.kind, `relationship-${stage}`]);
   if (a.householdId === b.householdId) tags.add("same household");
   if (a.workplaceId && a.workplaceId === b.workplaceId) tags.add("same workplace");
   if (a.lifeStage === "child" || b.lifeStage === "child") tags.add("child present");
   if (a.problems.length || b.problems.length) tags.add("active problem");
+  if (stage === "stranger" || stage === "acquaintance") tags.add("early relationship");
+  if (stage === "friend" || stage === "close" || stage === "family") tags.add("trusted relationship");
   if (topic === "money stress") tags.add("economy");
   if (topic === "school") tags.add("education");
   if (topic === "workplace gossip") tags.add("employment");
@@ -560,7 +563,7 @@ function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, co
   const tone = conversationTone(topic, classification, a, b);
   const aiUsefulness = conversationAiUsefulness(importance, intent, scope, interactionCount);
   const tags = Array.from(new Set([
-    ...evidenceTags(sim, topic, classification, context, a, b, location),
+    ...evidenceTags(sim, topic, classification, context, stage, a, b, location),
     intent,
     scope,
     tone,
