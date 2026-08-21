@@ -1,6 +1,5 @@
-import type { Citizen, ConversationClassification, ConversationImportance, ConversationTopic, SimulationState } from "../types/simulation";
+import type { Citizen, ConversationClassification, ConversationImportance, ConversationTopic, RelationshipStage, SimulationState } from "../types/simulation";
 import {
-  chooseConversationTopic as brainChooseConversationTopic,
   classifyConversation as brainClassifyConversation,
   conversationText as brainConversationText,
   emotionAfterConversation,
@@ -24,6 +23,7 @@ type ConversationPlan = {
   topic: ConversationTopic;
   classification: ConversationClassification;
   classificationReason: string;
+  relationshipStage: RelationshipStage;
   aText: string;
   bText: string;
   location: ConversationLocation;
@@ -103,6 +103,66 @@ function conversationImportance(topic: ConversationTopic, classification: Conver
   return "low";
 }
 
+export function relationshipStage(a: Citizen, b: Citizen): RelationshipStage {
+  const relationship = a.relationships[b.id];
+  if (!relationship) return "stranger";
+  if (a.householdId === b.householdId && a.familyRole !== "roommate" && b.familyRole !== "roommate") return "family";
+  if (
+    (a.familyRole === "parent" && b.householdId === a.householdId)
+    || (b.familyRole === "parent" && a.householdId === b.householdId)
+    || (a.workplaceId === "school" && Boolean(b.schoolClass))
+    || (b.workplaceId === "school" && Boolean(a.schoolClass))
+  ) return "authority";
+
+  const score = relationship.familiarity * 0.42
+    + relationship.trust * 0.28
+    + relationship.friendship * 0.24
+    + relationship.interactions * 3
+    - relationship.dislike * 0.35;
+  if (relationship.interactions >= 9 && relationship.trust >= 68 && relationship.friendship >= 58) return "close";
+  if (relationship.interactions >= 5 && score >= 54) return "friend";
+  if (relationship.interactions >= 2 && score >= 34) return "familiar";
+  if (relationship.interactions >= 1 || relationship.familiarity >= 18) return "acquaintance";
+  return "stranger";
+}
+
+function canDiscussTopic(topic: ConversationTopic, stage: RelationshipStage, context: ConversationContext, a: Citizen, b: Citizen) {
+  if (topic === "daily life") return true;
+  if (topic === "school") return context.zone === "school" || stage === "family" || stage === "authority" || stage === "friend" || stage === "close";
+  if (topic === "workplace gossip") return context.zone === "work" && (stage === "familiar" || stage === "friend" || stage === "close");
+  if (topic === "future plans") return stage === "familiar" || stage === "friend" || stage === "close" || stage === "family";
+  if (topic === "family") return stage === "family" || stage === "close" || (stage === "friend" && Math.min(a.relationships[b.id]?.trust ?? 0, b.relationships[a.id]?.trust ?? 0) >= 45);
+  if (topic === "personal problem") return stage === "friend" || stage === "close" || stage === "family" || stage === "authority";
+  if (topic === "money stress") return stage === "close" || stage === "family" || (stage === "friend" && Math.min(a.relationships[b.id]?.trust ?? 0, b.relationships[a.id]?.trust ?? 0) >= 55);
+  if (topic === "rumor" || topic === "people gossip") return stage === "friend" || stage === "close";
+  return false;
+}
+
+function possibleTopics(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, stage: RelationshipStage) {
+  const options: ConversationTopic[] = ["daily life"];
+  if (a.workplaceId && a.workplaceId === b.workplaceId) options.push("workplace gossip");
+  if (a.problems.length || b.problems.length) options.push("personal problem");
+  if (a.cash < 180 || b.cash < 180 || a.problems.some((problem) => problem.toLowerCase().includes("money")) || b.problems.some((problem) => problem.toLowerCase().includes("money"))) options.push("money stress");
+  if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") options.push("family");
+  if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") options.push("school");
+  if (a.goalFocus || b.goalFocus) options.push("future plans");
+  if (a.knownFacts.includes(FACTORY_RUMOR) || b.knownFacts.includes(FACTORY_RUMOR)) options.push("rumor");
+  if (sim.citizens.length > 3) options.push("people gossip");
+  return options.filter((topic, index, topics) => (
+    topics.indexOf(topic) === index && canDiscussTopic(topic, stage, context, a, b)
+  ));
+}
+
+function conversationLine(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, stage: RelationshipStage, rand: () => number) {
+  if (topic === "daily life" && stage === "stranger") {
+    return `${speaker.name} introduced themselves to ${listener.name} and kept the conversation light.`;
+  }
+  if (topic === "daily life" && stage === "acquaintance") {
+    return `${speaker.name} made small talk with ${listener.name} while getting a little more familiar.`;
+  }
+  return brainConversationText(sim, speaker, listener, topic, rand);
+}
+
 function evidenceTags(topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen, location: ConversationLocation) {
   const tags = new Set<string>([topic, classification, context.zone, location.building.kind]);
   if (a.householdId === b.householdId) tags.add("same household");
@@ -127,11 +187,18 @@ function evidenceSummary(topic: ConversationTopic, classification: ConversationC
   return `${a.name} and ${b.name} maintained an ordinary social tie.`;
 }
 
-function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, rand: () => number): ConversationPlan {
-  const topic = brainChooseConversationTopic(sim, a, b, rand);
-  const aText = brainConversationText(sim, a, b, topic, rand);
-  const bText = brainConversationText(sim, b, a, topic, rand);
-  const { classification, reason: classificationReason } = brainClassifyConversation(topic, a, b);
+function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, stage: RelationshipStage, rand: () => number): ConversationPlan {
+  const topics = possibleTopics(sim, a, b, context, stage);
+  const topic = topics.length ? topics[Math.floor(rand() * topics.length)] : "daily life";
+  const aText = conversationLine(sim, a, b, topic, stage, rand);
+  const bText = conversationLine(sim, b, a, topic, stage, rand);
+  const classified = brainClassifyConversation(topic, a, b);
+  const classification = topic === "daily life" && (stage === "stranger" || stage === "acquaintance")
+    ? "casual"
+    : classified.classification;
+  const classificationReason = topic === "daily life" && (stage === "stranger" || stage === "acquaintance")
+    ? "They are still building basic familiarity, so the exchange stays light."
+    : classified.reason;
   const location = conversationLocation(a, b);
   const importance = conversationImportance(topic, classification, a, b);
   const tags = evidenceTags(topic, classification, context, a, b, location);
@@ -141,6 +208,7 @@ function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, co
     topic,
     classification,
     classificationReason,
+    relationshipStage: stage,
     aText,
     bText,
     location,
@@ -168,6 +236,7 @@ function addConversationEntry(sim: SimulationState, speaker: Citizen, listener: 
     classification: plan.classification,
     classificationReason: plan.classificationReason,
     contextZone: plan.contextZone,
+    relationshipStage: plan.relationshipStage,
     importance: plan.importance,
     evidenceSummary: plan.evidenceSummary,
     evidenceTags: plan.evidenceTags,
@@ -189,6 +258,7 @@ function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, pla
     classification: plan.classification,
     classificationReason: plan.classificationReason,
     contextZone: plan.contextZone,
+    relationshipStage: plan.relationshipStage,
     importance: plan.importance,
     evidenceSummary: plan.evidenceSummary,
     evidenceTags: plan.evidenceTags,
@@ -216,9 +286,11 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   const relationship = a.relationships[b.id];
   const context = conversationContext(a, b);
   if (!context) return;
+  const stage = relationshipStage(a, b);
   const socialMood = a.currentIntention === "socialize" || b.currentIntention === "socialize";
   const householdTalk = context.zone === "home" ? 1.7 : 1;
-  const chance = ((relationship.familiarity + relationship.friendship + relationship.trust - relationship.dislike) / 5200)
+  const introductionBoost = stage === "stranger" ? 0.012 : stage === "acquaintance" ? 0.008 : 0;
+  const chance = introductionBoost + ((relationship.familiarity + relationship.friendship + relationship.trust - relationship.dislike) / 5200)
     * a.routine.sociability
     * b.routine.sociability
     * context.multiplier
@@ -228,7 +300,7 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   if (rand() > chance) return;
 
   const reverse = b.relationships[a.id];
-  const plan = createConversationPlan(sim, a, b, context, rand);
+  const plan = createConversationPlan(sim, a, b, context, stage, rand);
   const delta = plan.relationshipDelta;
 
   relationship.familiarity = clamp(relationship.familiarity + delta, 0, 100);
@@ -237,6 +309,12 @@ export function maybeTalk(sim: SimulationState, a: Citizen, b: Citizen, tick: nu
   reverse.familiarity = clamp(reverse.familiarity + delta, 0, 100);
   reverse.friendship = clamp(reverse.friendship + delta * 0.5 - reverse.dislike * 0.02, 0, 100);
   reverse.trust = clamp(reverse.trust + delta * 0.35, 0, 100);
+  relationship.interactions += 1;
+  reverse.interactions += 1;
+  relationship.firstMetDay = relationship.firstMetDay ?? sim.day;
+  reverse.firstMetDay = reverse.firstMetDay ?? sim.day;
+  relationship.lastInteractionDay = sim.day;
+  reverse.lastInteractionDay = sim.day;
 
   a.social = clamp(a.social + 8, 0, 100);
   b.social = clamp(b.social + 8, 0, 100);

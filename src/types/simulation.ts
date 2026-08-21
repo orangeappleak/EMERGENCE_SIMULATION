@@ -60,6 +60,9 @@ export type Relationship = {
   trust: number;
   dislike: number;
   familiarity: number;
+  interactions: number;
+  firstMetDay?: number;
+  lastInteractionDay?: number;
 };
 
 export type LifeStage = "child" | "teen" | "adult" | "elder";
@@ -75,6 +78,8 @@ export type ConversationTopic = "workplace gossip" | "people gossip" | "money st
 export type ConversationClassification = "casual" | "serious" | "secretive" | "supportive" | "planning";
 
 export type ConversationImportance = "low" | "medium" | "high";
+
+export type RelationshipStage = "stranger" | "acquaintance" | "familiar" | "friend" | "close" | "family" | "authority";
 
 export type PersonalGoalKind = "school" | "career" | "money" | "friendship" | "family" | "wellbeing" | "curiosity";
 
@@ -325,6 +330,7 @@ export type ConversationEntry = {
   classification: ConversationClassification;
   classificationReason?: string;
   contextZone?: "home" | "work" | "school" | "public" | "street";
+  relationshipStage?: RelationshipStage;
   importance?: ConversationImportance;
   evidenceSummary?: string;
   evidenceTags?: string[];

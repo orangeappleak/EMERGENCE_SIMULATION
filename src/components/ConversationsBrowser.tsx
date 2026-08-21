@@ -109,7 +109,7 @@ export function ConversationsBrowser({ sim, onSelectCitizen, onClose }: Conversa
                     <li key={entry.id}>
                       <div className="conversation-meta">
                         <strong>{entry.time}</strong>
-                        <span>{entry.locationName}{entry.locationSlotName ? ` · ${entry.locationSlotName}` : ""}{entry.importance ? ` · ${label(entry.importance)}` : ""}</span>
+                        <span>{entry.locationName}{entry.locationSlotName ? ` · ${entry.locationSlotName}` : ""}{entry.relationshipStage ? ` · ${label(entry.relationshipStage)}` : ""}{entry.importance ? ` · ${label(entry.importance)}` : ""}</span>
                       </div>
                       <div className="conversation-people">
                         <button type="button" onClick={() => entry.speakerId && onSelectCitizen(entry.speakerId)}>

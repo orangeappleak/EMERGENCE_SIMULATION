@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Citizen, SimulationState } from "../types/simulation";
+import { relationshipStage } from "../simulation/conversationSystem";
 import { FACTORY_RUMOR } from "../simulation/constants";
 import { formatTime } from "../simulation/time";
 import { buildingById, placeSlotById } from "../simulation/world";
@@ -77,11 +78,16 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
     .map((id) => sim.citizens.find((item) => item.id === id))
     .filter((item) => item !== undefined);
   const relationships = Object.entries(citizen.relationships)
-    .map(([id, relationship]) => ({
-      citizen: sim.citizens.find((item) => item.id === id),
-      relationship,
-    }))
-    .filter((item): item is { citizen: Citizen; relationship: typeof item.relationship } => item.citizen !== undefined)
+    .map(([id, relationship]) => {
+      const otherCitizen = sim.citizens.find((item) => item.id === id);
+      return {
+        citizen: otherCitizen,
+        relationship,
+        stage: otherCitizen ? relationshipStage(citizen, otherCitizen) : "stranger",
+      };
+    })
+    .filter((item): item is { citizen: Citizen; relationship: typeof item.relationship; stage: ReturnType<typeof relationshipStage> } => item.citizen !== undefined)
+    .filter((item) => item.stage !== "stranger")
     .sort((a, b) => {
       const aScore = a.relationship.friendship + a.relationship.trust + a.relationship.familiarity;
       const bScore = b.relationship.friendship + b.relationship.trust + b.relationship.familiarity;
@@ -552,7 +558,8 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
               {item.citizen ? (
                 <button className="person-link" type="button" onClick={() => onSelectCitizen(item.citizen.id)}>
                   <span>{item.citizen.name}</span>
-                  <strong>friendship {Math.round(item.relationship.friendship)} · trust {Math.round(item.relationship.trust)}</strong>
+                  <strong>{titleCase(item.stage)} · {item.relationship.interactions} talks</strong>
+                  <small>friendship {Math.round(item.relationship.friendship)} · trust {Math.round(item.relationship.trust)}</small>
                 </button>
               ) : null}
             </li>
@@ -574,7 +581,7 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
             <li key={entry.id}>
               <button className="conversation-link" type="button" disabled={!entry.withId} onClick={() => entry.withId && onSelectCitizen(entry.withId)}>
                 <strong>{entry.withName} · {entry.topic} · {entry.classification}</strong>
-                <span>Day {entry.day} {entry.time}{entry.importance ? ` · ${entry.importance} importance` : ""}</span>
+                <span>Day {entry.day} {entry.time}{entry.relationshipStage ? ` · ${titleCase(entry.relationshipStage)}` : ""}{entry.importance ? ` · ${entry.importance} importance` : ""}</span>
                 <em>{entry.text}</em>
                 {entry.evidenceSummary ? <small>{entry.evidenceSummary}</small> : null}
                 {entry.classificationReason ? <small>{entry.classificationReason}</small> : null}
