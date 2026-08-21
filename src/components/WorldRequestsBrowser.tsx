@@ -26,6 +26,7 @@ function matches(request: WorldRequest, query: string) {
     request.status,
     request.expectedEffect,
     request.approvalReason,
+    ...(request.consequences ?? []),
     ...(request.evidence ?? []),
     ...(request.needs ?? []),
   ].join(" ").toLowerCase().includes(query);
@@ -49,8 +50,11 @@ export function WorldRequestsBrowser({ sim, onSelectCitizen, onResolveRequest, o
   const pendingCount = sim.worldRequests.filter((request) => request.status === "pending").length;
   const relatedDecisions = selectedRequest
     ? sim.worldDecisions.filter((decision) => (
-        decision.actorId === selectedRequest.requestedById
-        && decision.title.toLowerCase().includes(selectedRequest.title.toLowerCase())
+        selectedRequest.followUpDecisionIds?.includes(decision.id)
+        || (
+          decision.actorId === selectedRequest.requestedById
+          && decision.title.toLowerCase().includes(selectedRequest.title.toLowerCase())
+        )
       )).slice(0, 4)
     : [];
 
@@ -198,6 +202,17 @@ export function WorldRequestsBrowser({ sim, onSelectCitizen, onResolveRequest, o
                     <span>Day {selectedRequest.resolvedDay} {selectedRequest.resolvedTime}</span>
                     <p>{selectedRequest.resolutionNote}</p>
                   </div>
+                </div>
+              ) : null}
+
+              {selectedRequest.consequences?.length ? (
+                <div className="context-section">
+                  <h4>Consequences</h4>
+                  {selectedRequest.consequences.map((item) => (
+                    <div className="context-card" key={item}>
+                      <p>{item}</p>
+                    </div>
+                  ))}
                 </div>
               ) : null}
 

@@ -30,15 +30,17 @@ export function addWorldDecision(sim: SimulationState, decision: Omit<WorldDecis
     && entry.actorId === decision.actorId
     && entry.householdId === decision.householdId
   ));
-  if (repeated) return;
+  if (repeated) return null;
 
-  sim.worldDecisions.unshift({
+  const entry: WorldDecision = {
     id: `${sim.day}-${Math.round(sim.minute)}-${sim.worldDecisions.length}-${decision.category}-${decision.title}`,
     day: sim.day,
     time: formatTime(sim.minute),
     ...decision,
-  });
+  };
+  sim.worldDecisions.unshift(entry);
   sim.worldDecisions = sim.worldDecisions.slice(0, 220);
+  return entry;
 }
 
 function observationKey(observation: Omit<WorldObservation, "id" | "day" | "time">) {
