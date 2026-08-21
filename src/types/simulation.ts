@@ -328,6 +328,12 @@ export type LifeJournalEntry = {
   text: string;
 };
 
+export type ConversationDialogueLine = {
+  speakerId: string;
+  speakerName: string;
+  text: string;
+};
+
 export type ConversationEntry = {
   id: string;
   day: number;
@@ -352,6 +358,7 @@ export type ConversationEntry = {
   locationName?: string;
   locationSlotId?: string;
   locationSlotName?: string;
+  dialogue?: ConversationDialogueLine[];
   text: string;
 };
 

@@ -542,6 +542,40 @@ h3 {
   line-height: 1.35;
 }
 
+.conversation-dialogue {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.conversation-dialogue p {
+  background: #f8fbff;
+  border: 1px solid #dbe7f3;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 8px;
+}
+
+.conversation-dialogue strong {
+  color: var(--blue);
+  font-size: 11px;
+}
+
+.conversation-dialogue span {
+  color: #22272c;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.conversation-summary {
+  color: var(--muted) !important;
+  font-size: 11px !important;
+  font-weight: 750;
+  margin-top: 8px;
+}
+
 .evidence-tags {
   display: flex;
   flex-wrap: wrap;
@@ -2114,6 +2148,21 @@ h3 {
   font-size: 12px;
   font-style: normal;
   line-height: 1.3;
+}
+
+.conversation-link-dialogue {
+  display: grid !important;
+  gap: 4px;
+}
+
+.conversation-link .conversation-link-dialogue small {
+  background: #f8fbff;
+  border: 1px solid #dbe7f3;
+  border-radius: 7px;
+  color: #303a43;
+  font-size: 11px;
+  margin-top: 0;
+  padding: 6px 7px;
 }
 
 .conversation-link small {
