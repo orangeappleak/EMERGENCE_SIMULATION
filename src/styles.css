@@ -498,6 +498,23 @@ h3 {
   margin-bottom: 6px;
 }
 
+.conversation-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.conversation-signals span {
+  background: #f3f5f4;
+  border: 1px solid #dfe5e2;
+  border-radius: 999px;
+  color: #4b5961;
+  font-size: 10px;
+  font-weight: 850;
+  padding: 4px 7px;
+}
+
 .conversation-people {
   flex-wrap: wrap;
   margin-bottom: 6px;

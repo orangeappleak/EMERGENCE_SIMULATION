@@ -1,4 +1,14 @@
-import type { Citizen, ConversationClassification, ConversationImportance, ConversationTopic, RelationshipStage, SimulationState } from "../types/simulation";
+import type {
+  Citizen,
+  ConversationClassification,
+  ConversationImportance,
+  ConversationIntent,
+  ConversationScope,
+  ConversationTone,
+  ConversationTopic,
+  RelationshipStage,
+  SimulationState,
+} from "../types/simulation";
 import {
   hasDiscoveredMoneyPressure,
   classifyConversation as brainClassifyConversation,
@@ -32,6 +42,10 @@ type ConversationPlan = {
   evidenceSummary: string;
   evidenceTags: string[];
   importance: ConversationImportance;
+  intent: ConversationIntent;
+  scope: ConversationScope;
+  tone: ConversationTone;
+  aiUsefulness: ConversationImportance;
   relationshipDelta: number;
   shouldLogWorldDecision: boolean;
   shouldWriteMemory: boolean;
@@ -101,6 +115,39 @@ function conversationImportance(topic: ConversationTopic, classification: Conver
   if (topic === "money stress" || topic === "personal problem") return "high";
   if (classification === "planning" && (a.goalFocus || b.goalFocus)) return "high";
   if (classification === "serious" || classification === "planning" || a.problems.length || b.problems.length) return "medium";
+  return "low";
+}
+
+function conversationIntent(topic: ConversationTopic, stage: RelationshipStage, relationshipInteractions: number): ConversationIntent {
+  if (topic === "future plans") return "planning";
+  if (topic === "personal problem" || topic === "money stress") return "disclosure";
+  if (topic === "workplace gossip" || topic === "people gossip" || topic === "rumor") return "complaint";
+  if (topic === "school" && stage === "authority") return "advice";
+  if (relationshipInteractions >= 2) return "follow-up";
+  if (stage === "stranger") return "greeting";
+  return "check-in";
+}
+
+function conversationScope(topic: ConversationTopic, context: ConversationContext, location: ConversationLocation, a: Citizen, b: Citizen): ConversationScope {
+  if (topic === "money stress" || topic === "personal problem" || topic === "future plans") return "personal";
+  if (topic === "family" || a.householdId === b.householdId) return "household";
+  if (topic === "school" || location.building.kind === "school" || context.zone === "school") return "school";
+  if (topic === "workplace gossip" || context.zone === "work" || location.building.kind === "factory" || location.building.kind === "office") return "workplace";
+  if (topic === "rumor" || topic === "people gossip") return "town";
+  return "relationship";
+}
+
+function conversationTone(topic: ConversationTopic, classification: ConversationClassification, a: Citizen, b: Citizen): ConversationTone {
+  if (topic === "money stress" || topic === "personal problem" || classification === "supportive") return "worried";
+  if (topic === "future plans" || classification === "planning") return "hopeful";
+  if (a.currentEmotion === "tired" || b.currentEmotion === "tired" || a.needs.rest > 78 || b.needs.rest > 78) return "tired";
+  if (classification === "casual" && (a.currentEmotion === "happy" || b.currentEmotion === "happy" || a.currentEmotion === "connected" || b.currentEmotion === "connected")) return "warm";
+  return "neutral";
+}
+
+function conversationAiUsefulness(importance: ConversationImportance, intent: ConversationIntent, scope: ConversationScope, relationshipInteractions: number): ConversationImportance {
+  if (importance === "high" || intent === "disclosure" || intent === "planning") return "high";
+  if (importance === "medium" || intent === "complaint" || scope === "town" || relationshipInteractions >= 5) return "medium";
   return "low";
 }
 
@@ -387,7 +434,18 @@ function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, co
     ? "They are still building ordinary familiarity, so the exchange stays light."
     : classified.reason;
   const importance = conversationImportance(topic, classification, a, b);
-  const tags = evidenceTags(sim, topic, classification, context, a, b, location);
+  const interactionCount = sharedInteractions(a, b);
+  const intent = conversationIntent(topic, stage, interactionCount);
+  const scope = conversationScope(topic, context, location, a, b);
+  const tone = conversationTone(topic, classification, a, b);
+  const aiUsefulness = conversationAiUsefulness(importance, intent, scope, interactionCount);
+  const tags = Array.from(new Set([
+    ...evidenceTags(sim, topic, classification, context, a, b, location),
+    intent,
+    scope,
+    tone,
+    `ai-${aiUsefulness}`,
+  ]));
   const relationshipDelta = topic === "personal problem" || topic === "future plans" ? 4 : topic === "rumor" || topic === "people gossip" ? 3 : 2;
 
   return {
@@ -402,6 +460,10 @@ function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, co
     evidenceSummary: evidenceSummary(sim, topic, classification, context, a, b, location),
     evidenceTags: tags,
     importance,
+    intent,
+    scope,
+    tone,
+    aiUsefulness,
     relationshipDelta,
     shouldLogWorldDecision: classification === "secretive"
       || (sim.day >= 2 && classification === "planning" && topic === "future plans"),
@@ -424,6 +486,10 @@ function addConversationEntry(sim: SimulationState, speaker: Citizen, listener: 
     contextZone: plan.contextZone,
     relationshipStage: plan.relationshipStage,
     importance: plan.importance,
+    intent: plan.intent,
+    scope: plan.scope,
+    tone: plan.tone,
+    aiUsefulness: plan.aiUsefulness,
     evidenceSummary: plan.evidenceSummary,
     evidenceTags: plan.evidenceTags,
     text,
@@ -446,6 +512,10 @@ function addGlobalConversation(sim: SimulationState, a: Citizen, b: Citizen, pla
     contextZone: plan.contextZone,
     relationshipStage: plan.relationshipStage,
     importance: plan.importance,
+    intent: plan.intent,
+    scope: plan.scope,
+    tone: plan.tone,
+    aiUsefulness: plan.aiUsefulness,
     evidenceSummary: plan.evidenceSummary,
     evidenceTags: plan.evidenceTags,
     locationId: plan.location.building.id,
