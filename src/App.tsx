@@ -9,6 +9,7 @@ import { PeopleBrowser } from "./components/PeopleBrowser";
 import { PixiWorld } from "./components/PixiWorld";
 import { TransactionsBrowser } from "./components/TransactionsBrowser";
 import { WorldDecisionsBrowser } from "./components/WorldDecisionsBrowser";
+import { WorldProjectsBrowser } from "./components/WorldProjectsBrowser";
 import { WorldRequestsBrowser } from "./components/WorldRequestsBrowser";
 import { WorldSignalsBrowser } from "./components/WorldSignalsBrowser";
 import { useSimulation } from "./state/useSimulation";
@@ -22,6 +23,7 @@ export default function App() {
   const [transactionsOpen, setTransactionsOpen] = useState(false);
   const [worldDecisionsOpen, setWorldDecisionsOpen] = useState(false);
   const [worldRequestsOpen, setWorldRequestsOpen] = useState(false);
+  const [worldProjectsOpen, setWorldProjectsOpen] = useState(false);
   const [worldSignalsOpen, setWorldSignalsOpen] = useState(false);
   const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -70,6 +72,7 @@ export default function App() {
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
@@ -86,6 +89,7 @@ export default function App() {
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
@@ -102,6 +106,7 @@ export default function App() {
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
@@ -118,6 +123,7 @@ export default function App() {
               setConversationsOpen(false);
               setWorldDecisionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
@@ -134,6 +140,7 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
@@ -150,12 +157,30 @@ export default function App() {
               setConversationsOpen(false);
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
           >
             {worldRequestsOpen ? "Hide Requests" : "Requests"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWorldProjectsOpen((open) => !open);
+              setControlsOpen(false);
+              setPeopleOpen(false);
+              setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
+              setWorldRequestsOpen(false);
+              setWorldSignalsOpen(false);
+              setCivicIssuesOpen(false);
+              setSelectedBuildingId(null);
+            }}
+          >
+            {worldProjectsOpen ? "Hide Projects" : "Projects"}
           </button>
           <button
             type="button"
@@ -167,6 +192,7 @@ export default function App() {
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setCivicIssuesOpen(false);
               setSelectedBuildingId(null);
             }}
@@ -183,6 +209,7 @@ export default function App() {
               setTransactionsOpen(false);
               setWorldDecisionsOpen(false);
               setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setSelectedBuildingId(null);
             }}
@@ -289,6 +316,19 @@ export default function App() {
           </div>
         ) : null}
 
+        {worldProjectsOpen ? (
+          <div className="drawer drawer-center">
+            <WorldProjectsBrowser
+              sim={simulation.sim}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
+              onClose={() => setWorldProjectsOpen(false)}
+            />
+          </div>
+        ) : null}
+
         {worldSignalsOpen ? (
           <div className="drawer drawer-center">
             <WorldSignalsBrowser
@@ -332,6 +372,7 @@ export default function App() {
             setTransactionsOpen(false);
             setWorldDecisionsOpen(false);
             setWorldRequestsOpen(false);
+            setWorldProjectsOpen(false);
             setWorldSignalsOpen(false);
             setCivicIssuesOpen(false);
           }}
