@@ -30,7 +30,12 @@ const decisionSchema = {
     observations: {
       type: "array",
       maxItems: 0,
-      items: { type: "object" },
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+        required: [],
+      },
     },
     memories: {
       type: "array",
