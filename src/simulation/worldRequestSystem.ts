@@ -16,6 +16,31 @@ function requestId(sim: SimulationState, kind: WorldObservationKind, title: stri
   return `${sim.day}-${Math.round(sim.minute)}-${sim.worldRequests.length}-${kind}-${title}`;
 }
 
+const REQUEST_EARLIEST_DAY: Partial<Record<WorldObservationKind, number>> = {
+  money: 2,
+  healthcare: 2,
+  employment: 2,
+  education: 2,
+  food: 2,
+  housing: 3,
+  governance: 3,
+  social: 2,
+  movement: 2,
+  weather: 2,
+  safety: 2,
+  general: 2,
+};
+
+const REQUEST_MIN_EVIDENCE: Partial<Record<WorldObservationKind, number>> = {
+  governance: 4,
+  housing: 4,
+  money: 3,
+  healthcare: 3,
+  employment: 3,
+  education: 3,
+  food: 3,
+};
+
 function addWorldRequest(sim: SimulationState, request: Omit<WorldRequest, "id" | "day" | "time" | "status">) {
   if (requestExists(sim, request.title, request.requestedById)) return;
   sim.worldRequests.unshift({
@@ -40,12 +65,27 @@ function requesterFor(sim: SimulationState, citizenIds: string[]) {
     ?? sim.citizens[0];
 }
 
-function requestFromConcern(sim: SimulationState) {
-  const concern = sim.townConcerns.find((item) => (
-    (item.status === "watched" || item.status === "strong")
-    && item.maturity >= 45
-    && item.evidence.length > 0
+function concernCanBecomeRequest(sim: SimulationState, concern: SimulationState["townConcerns"][number]) {
+  const earliestDay = REQUEST_EARLIEST_DAY[concern.kind] ?? 2;
+  const minimumEvidence = REQUEST_MIN_EVIDENCE[concern.kind] ?? 3;
+  const daysObserved = Math.max(0, sim.day - concern.firstSeenDay);
+  const recentlyRequested = sim.worldRequests.some((request) => (
+    request.kind === concern.kind
+    && sim.day - request.day < 2
+    && (request.status === "pending" || request.status === "approved" || request.status === "denied")
   ));
+
+  return sim.day >= earliestDay
+    && daysObserved >= 1
+    && !recentlyRequested
+    && concern.status === "strong"
+    && concern.maturity >= 60
+    && concern.confidence >= 58
+    && concern.evidence.length >= minimumEvidence;
+}
+
+function requestFromConcern(sim: SimulationState) {
+  const concern = sim.townConcerns.find((item) => concernCanBecomeRequest(sim, item));
   if (!concern) return;
 
   const requester = requesterFor(sim, concern.affectedCitizenIds);
@@ -71,11 +111,17 @@ function requestFromConcern(sim: SimulationState) {
 
 function requestFromPersonalNeed(sim: SimulationState) {
   const candidate = sim.citizens.find((citizen) => (
-    (citizen.lifeStage === "elder" || citizen.lifeStage === "adult")
+    sim.day >= 2
+    && (citizen.lifeStage === "elder" || citizen.lifeStage === "adult")
     && citizen.job === "Unemployed"
     && citizen.cash < 220
     && citizen.today.workedMinutes < 1
-    && citizen.today.conversations >= 1
+    && citizen.today.conversations >= 2
+    && !sim.worldRequests.some((request) => (
+      request.kind === "employment"
+      && request.requestedById === citizen.id
+      && sim.day - request.day < 3
+    ))
   ));
   if (!candidate) return;
 

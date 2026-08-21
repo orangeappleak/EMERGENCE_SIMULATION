@@ -142,6 +142,24 @@ function isCivicIssueKind(kind: WorldObservationKind): kind is CivicIssueKind {
   return ["money", "healthcare", "employment", "education", "governance", "food"].includes(kind);
 }
 
+const ISSUE_EARLIEST_DAY: Record<CivicIssueKind, number> = {
+  money: 2,
+  healthcare: 2,
+  employment: 2,
+  education: 2,
+  food: 2,
+  governance: 3,
+};
+
+const ISSUE_MIN_EVIDENCE: Record<CivicIssueKind, number> = {
+  money: 3,
+  healthcare: 3,
+  employment: 3,
+  education: 3,
+  food: 3,
+  governance: 4,
+};
+
 function suggestedIssueKind(kind: WorldObservationKind): CivicIssueKind | undefined {
   return isCivicIssueKind(kind) ? kind : undefined;
 }
@@ -307,7 +325,7 @@ export function detectWorldObservations(sim: SimulationState) {
     && concern.maturity >= 30
     && (concern.status === "watched" || concern.status === "strong" || concern.status === "promoted")
   )).length;
-  if ((matureSeriousTalks.length >= 10 && coordinatedConcerns >= 1) || coordinatedConcerns >= 2) {
+  if (sim.day >= 2 && ((matureSeriousTalks.length >= 14 && coordinatedConcerns >= 1) || coordinatedConcerns >= 3)) {
     const adult = sim.citizens.find((citizen) => hasCivicMaturity(citizen) && (citizen.personality.responsibility > 55 || citizen.personality.sociability > 60));
     addWorldObservation(sim, {
       kind: "governance",
@@ -396,9 +414,12 @@ function concernForIssue(sim: SimulationState, kind: CivicIssueKind) {
 
 function concernCanPromoteIssue(sim: SimulationState, kind: CivicIssueKind, force = false) {
   if (force) return true;
+  if (sim.day < ISSUE_EARLIEST_DAY[kind]) return false;
   const concern = concernForIssue(sim, kind);
   if (!concern) return false;
-  return concern.status === "strong" || (concern.confidence >= 62 && concern.maturity >= 40 && concern.severity >= 38);
+  const daysObserved = Math.max(0, sim.day - concern.firstSeenDay);
+  if (daysObserved < 1 || concern.observationIds.length < ISSUE_MIN_EVIDENCE[kind]) return false;
+  return concern.status === "strong" || (concern.confidence >= 68 && concern.maturity >= 56 && concern.severity >= 42);
 }
 
 function concernEvidence(sim: SimulationState, kind: CivicIssueKind) {
