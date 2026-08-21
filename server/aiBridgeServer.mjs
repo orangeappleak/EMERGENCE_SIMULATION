@@ -4,6 +4,8 @@ const port = Number(process.env.EMERGENCE_AI_PORT ?? 8787);
 const provider = process.env.AI_PROVIDER ?? "groq";
 const model = process.env.AI_MODEL
   ?? (provider === "groq" ? "openai/gpt-oss-20b" : "gpt-4.1-mini");
+const localThrottleMs = Number(process.env.EMERGENCE_AI_THROTTLE_MS ?? 60_000);
+let lastProviderRequestAt = 0;
 
 const decisionSchema = {
   type: "object",
@@ -119,6 +121,7 @@ function apiConfig() {
             schema: decisionSchema,
           },
         },
+        max_completion_tokens: 320,
       }),
     };
   }
@@ -174,22 +177,51 @@ function brainPrompt() {
 
 function compactContext(context) {
   return {
-    contract: context.contract,
+    contract: {
+      version: context.contract?.version,
+    },
     time: context.time,
     identity: context.identity,
     situation: context.situation,
-    personality: context.personality,
+    personality: {
+      ambition: context.personality?.ambition,
+      sociability: context.personality?.sociability,
+      caution: context.personality?.caution,
+      curiosity: context.personality?.curiosity,
+    },
     needs: context.needs,
-    goals: context.goals?.slice(0, 4),
-    household: context.household,
+    goals: context.goals?.slice(0, 2).map((goal) => ({
+      kind: goal.kind,
+      title: goal.title,
+      progress: goal.progress,
+    })),
+    household: context.household
+      ? {
+        name: context.household.name,
+        stress: context.household.stress,
+        foodStock: context.household.foodStock,
+      }
+      : null,
     progress: context.progress,
-    availableActions: context.availableActions,
-    relationships: context.relationships?.slice(0, 6),
-    recentConversations: context.recentConversations?.slice(0, 5),
-    recentMemories: context.recentMemories?.slice(0, 5),
-    lifeJournal: context.lifeJournal?.slice(0, 5),
-    localSignals: context.localSignals?.slice(0, 5),
-    recentObservations: context.recentObservations?.slice(0, 5),
+    availableActions: context.availableActions?.map((action) => ({
+      intention: action.intention,
+      destinationId: action.destinationId,
+      destinationName: action.destinationName,
+    })),
+    relationships: context.relationships?.slice(0, 3).map((relationship) => ({
+      name: relationship.name,
+      job: relationship.job,
+      friendship: relationship.friendship,
+      trust: relationship.trust,
+      familiarity: relationship.familiarity,
+    })),
+    recentConversations: context.recentConversations?.slice(0, 2).map((conversation) => ({
+      time: conversation.time,
+      summary: conversation.summary,
+      topic: conversation.topic,
+      classification: conversation.classification,
+    })),
+    recentMemories: context.recentMemories?.slice(0, 2),
     constraints: context.constraints,
   };
 }
@@ -197,6 +229,14 @@ function compactContext(context) {
 async function createCitizenDecision(context) {
   const config = apiConfig();
   if (!config.apiKey) throw new Error(config.missingKey);
+  const now = Date.now();
+  if (now - lastProviderRequestAt < localThrottleMs) {
+    const waitSeconds = Math.ceil((localThrottleMs - (now - lastProviderRequestAt)) / 1000);
+    const error = new Error(`Local AI throttle is active. Try again in ${waitSeconds}s.`);
+    error.statusCode = 429;
+    throw error;
+  }
+  lastProviderRequestAt = now;
 
   const response = await fetch(config.url, {
     method: "POST",
@@ -209,7 +249,9 @@ async function createCitizenDecision(context) {
 
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error?.message ?? `${provider} request failed with ${response.status}`);
+    const error = new Error(payload.error?.message ?? `${provider} request failed with ${response.status}`);
+    error.statusCode = response.status;
+    throw error;
   }
 
   const outputText = extractOutputText(payload);
@@ -243,7 +285,8 @@ const server = http.createServer(async (request, response) => {
     const decision = await createCitizenDecision(context);
     sendJson(response, 200, decision);
   } catch (error) {
-    sendText(response, 500, error instanceof Error ? error.message : "AI bridge failed.");
+    const statusCode = error instanceof Error && Number.isInteger(error.statusCode) ? error.statusCode : 500;
+    sendText(response, statusCode, error instanceof Error ? error.message : "AI bridge failed.");
   }
 });
 

@@ -11,9 +11,11 @@ type ReadyAiDecision = {
 
 type AiBridgeRequestState = "requested" | "waiting" | "error";
 
+const requestCooldownMs = 60_000;
 const pending = new Map<string, PendingAiRequest>();
 const ready = new Map<string, ReadyAiDecision>();
 const failures = new Map<string, string>();
+let lastRequestAt = 0;
 
 function contextKey(context: CitizenBrainContext) {
   return `${context.identity.id}:${context.time.day}:${Math.floor(context.time.minute / 30)}`;
@@ -33,6 +35,7 @@ export function takeReadyAiDecision(citizen: Citizen, context: CitizenBrainConte
 
 export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext): AiBridgeRequestState {
   const key = contextKey(context);
+  const now = Date.now();
   const currentPending = pending.get(citizen.id);
   if (currentPending?.key === key) {
     citizen.aiBrainStatus = {
@@ -52,6 +55,15 @@ export function requestAiDecision(citizen: Citizen, context: CitizenBrainContext
     return "error";
   }
 
+  if (now - lastRequestAt < requestCooldownMs) {
+    citizen.aiBrainStatus = {
+      state: "waiting",
+      message: "AI bridge is cooling down to stay under the free model limit.",
+    };
+    return "waiting";
+  }
+
+  lastRequestAt = now;
   pending.set(citizen.id, { key });
   citizen.aiBrainStatus = {
     state: "waiting",
