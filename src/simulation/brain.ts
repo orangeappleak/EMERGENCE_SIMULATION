@@ -51,6 +51,15 @@ function personalMoneyPressure(citizen: Citizen) {
   return citizen.cash < 360 ? 48 : citizen.cash < 500 ? 20 : 0;
 }
 
+export function hasDiscoveredMoneyPressure(sim: SimulationState, citizen: Citizen, household?: Household | null) {
+  if (citizen.lifeStage === "child") return false;
+  if (sim.day <= 1) return false;
+  const moneyFriction = citizen.problemAwareness.money + (household?.moneyFriction ?? 0);
+  return moneyFriction >= 3
+    || citizen.problemAwareness.household >= 2
+    || (household?.unpaidBills ?? 0) > (household?.rent ?? 800) * 0.22;
+}
+
 function householdMoneyPressure(household?: Household) {
   if (!household) return 0;
   if (household.sharedCash < household.rent * 0.25) return 36;
@@ -345,7 +354,7 @@ export function totalMinute(sim: SimulationState) {
 export function updateEmotionAndProblems(sim: SimulationState, citizen: Citizen) {
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const problems: string[] = [];
-  if (personalMoneyPressure(citizen) > 0 || (household?.sharedCash ?? 0) < (household?.rent ?? 800)) problems.push("Money feels tight.");
+  if (hasDiscoveredMoneyPressure(sim, citizen, household) && (personalMoneyPressure(citizen) > 0 || (household?.sharedCash ?? 0) < (household?.rent ?? 800))) problems.push("Money feels tight.");
   if ((household?.stress ?? 0) > 60) problems.push("Home feels stressful.");
   if (citizen.needs.rest > 70 || citizen.energy < 42) problems.push("They feel worn down.");
   if (citizen.needs.belonging > 68 || citizen.social < 35) problems.push("They feel disconnected from people.");
@@ -356,7 +365,7 @@ export function updateEmotionAndProblems(sim: SimulationState, citizen: Citizen)
   citizen.problems = problems.slice(0, 4);
   if (citizen.needs.rest > 75 || citizen.energy < 35) citizen.currentEmotion = "tired";
   else if ((household?.stress ?? 0) > 68 || (citizen.careerProgress?.burnout ?? 0) > 76) citizen.currentEmotion = "stressed";
-  else if (personalMoneyPressure(citizen) > 28 || citizen.mood < 42) citizen.currentEmotion = "worried";
+  else if ((hasDiscoveredMoneyPressure(sim, citizen, household) && personalMoneyPressure(citizen) > 28) || citizen.mood < 42) citizen.currentEmotion = "worried";
   else if (citizen.needs.belonging > 70 || citizen.social < 32) citizen.currentEmotion = "lonely";
   else if (citizen.currentIntention === "socialize") citizen.currentEmotion = "connected";
   else if (citizen.currentIntention === "wander") citizen.currentEmotion = "curious";
@@ -369,7 +378,7 @@ function goalId(citizen: Citizen, kind: PersonalGoalKind) {
   return `${citizen.id}_${kind}`;
 }
 
-function goalCandidates(citizen: Citizen, household: Household | undefined): GoalCandidate[] {
+function goalCandidates(day: number, citizen: Citizen, household: Household | undefined): GoalCandidate[] {
   const householdStress = household?.stress ?? 0;
   const sharedCash = household?.sharedCash ?? 0;
   const candidates: GoalCandidate[] = [
@@ -426,7 +435,7 @@ function goalCandidates(citizen: Citizen, household: Household | undefined): Goa
     });
   }
 
-  if (personalMoneyPressure(citizen) > 0 || sharedCash < (household?.rent ?? 800)) {
+  if (day > 1 && (citizen.problemAwareness.money + citizen.problemAwareness.household + (household?.moneyFriction ?? 0) >= 3) && (personalMoneyPressure(citizen) > 0 || sharedCash < (household?.rent ?? 800))) {
     candidates.push({
       kind: "money",
       title: "Save more money",
@@ -454,7 +463,7 @@ export function refreshPersonalGoals(sim: SimulationState, citizen: Citizen, rec
   const existing = new Map(citizen.personalGoals.map((goal) => [goal.kind, goal]));
   const previousFocus = citizen.goalFocus;
   const rand = mulberry32(sim.day * 9301 + Math.floor(sim.minute / 120) * 211 + Number(citizen.id.split("_")[1]));
-  const chosen = goalCandidates(citizen, household)
+  const chosen = goalCandidates(sim.day, citizen, household)
     .map((candidate) => ({ ...candidate, score: candidate.score + rand() * 18 }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
@@ -662,6 +671,9 @@ export function chooseCitizenDecision(sim: SimulationState, citizen: Citizen, ra
 }
 
 export function chooseConversationTopic(sim: SimulationState, a: Citizen, b: Citizen, rand: () => number): ConversationTopic {
+  const aHousehold = sim.households.find((household) => household.id === a.householdId);
+  const bHousehold = sim.households.find((household) => household.id === b.householdId);
+  const moneyDiscovered = hasDiscoveredMoneyPressure(sim, a, aHousehold) || hasDiscoveredMoneyPressure(sim, b, bHousehold);
   if (isYoungChild(a) || isYoungChild(b)) {
     const childOptions: ConversationTopic[] = ["daily life"];
     if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") childOptions.push("family");
@@ -673,7 +685,7 @@ export function chooseConversationTopic(sim: SimulationState, a: Citizen, b: Cit
   const options: ConversationTopic[] = ["daily life", "future plans"];
   if (a.workplaceId && a.workplaceId === b.workplaceId) options.push("workplace gossip");
   if (a.problems.length || b.problems.length) options.push("personal problem");
-  if (personalMoneyPressure(a) > 0 || personalMoneyPressure(b) > 0) options.push("money stress");
+  if (moneyDiscovered && (personalMoneyPressure(a) > 0 || personalMoneyPressure(b) > 0)) options.push("money stress");
   if (a.householdId === b.householdId || a.familyRole === "parent" || b.familyRole === "parent") options.push("family");
   if (a.schoolClass || b.schoolClass || a.workplaceId === "school" || b.workplaceId === "school") options.push("school");
   if (a.knownFacts.includes(FACTORY_RUMOR) || b.knownFacts.includes(FACTORY_RUMOR)) options.push("rumor");

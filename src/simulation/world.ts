@@ -180,7 +180,13 @@ function createCitizen(
     brainDebug: null,
     goalFocus: "settle into the day",
     personalGoals: [],
-    problems: lifeStage === "adult" && cash < 420 ? ["Money feels tight."] : [],
+    problems: [],
+    problemAwareness: {
+      money: 0,
+      household: 0,
+      food: 0,
+      health: 0,
+    },
     recentAuthorityEvents: [],
     recentConversations: [],
     committedUntil: 0,
@@ -287,6 +293,8 @@ function createTownPopulation(): { households: Household[]; citizens: Citizen[] 
       stress: 20 + Math.round(rand() * 42),
       unpaidBills: 0,
       financialStatus: "stable",
+      moneyFriction: 0,
+      foodFriction: 0,
       lastMoneyNote: "The household is keeping up with bills.",
     };
 
@@ -356,12 +364,23 @@ function createTownPopulation(): { households: Household[]; citizens: Citizen[] 
       const family = sameHousehold && a.familyRole !== "roommate" && b.familyRole !== "roommate";
       const schoolLink = (a.workplaceId === "school" && b.schoolClass) || (b.workplaceId === "school" && a.schoolClass);
       const rand = mulberry32(a.id.length * 1009 + b.id.length * 917 + a.name.charCodeAt(0) * b.name.charCodeAt(1));
-      const familiarity = clamp((family ? 88 : sameHome ? 70 : 12) + (coworkers ? 26 : 0) + (schoolLink ? 34 : 0) + rand() * 16, 0, 100);
+      const seedHistory = family ? 24 : sameHome ? 8 : coworkers || schoolLink ? 2 : 0;
+      const familiarity = clamp(
+        (family ? 86 : sameHome ? 48 : 4)
+        + (coworkers ? 22 : 0)
+        + (schoolLink ? 28 : 0)
+        + rand() * (family ? 12 : sameHome ? 14 : 10),
+        0,
+        100,
+      );
       a.relationships[b.id] = {
-        friendship: clamp((family ? 72 : 0) + (schoolLink ? 18 : 0) + familiarity * 0.42 + rand() * 24, 0, 100),
-        trust: clamp((family ? 78 : 0) + (schoolLink ? 22 : 0) + familiarity * 0.4 + rand() * 22, 0, 100),
+        friendship: clamp((family ? 68 : sameHome ? 18 : 0) + (schoolLink ? 12 : 0) + familiarity * (family ? 0.35 : 0.22) + rand() * 12, 0, 100),
+        trust: clamp((family ? 76 : sameHome ? 22 : 0) + (schoolLink ? 14 : 0) + familiarity * (family ? 0.38 : 0.24) + rand() * 12, 0, 100),
         dislike: clamp((family ? rand() * 7 : rand() * 22) - familiarity * 0.06, 0, 100),
         familiarity,
+        interactions: seedHistory,
+        firstMetDay: seedHistory > 0 ? 1 : undefined,
+        lastInteractionDay: seedHistory > 0 ? 1 : undefined,
       };
     }
   }
