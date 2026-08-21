@@ -243,7 +243,7 @@ export default function App() {
               setSelectedBuildingId(null);
             }}
           >
-            {aiMonitorOpen ? "Hide AI Monitor" : "AI Monitor"}
+            {aiMonitorOpen ? "Hide AI" : "AI Monitor"}
           </button>
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}

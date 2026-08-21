@@ -100,53 +100,55 @@ export function AiMonitor({ sim, selectedCitizenId, onSelectCitizen, onClose }: 
         </div>
       </div>
 
-      <div className="detail-grid">
-        <div className="detail-card">
+      <div className="ai-monitor-summary" aria-label="AI bridge summary">
+        <div className="ai-stat-card">
           <span>AI enabled</span>
           <strong>{enabledCount}</strong>
         </div>
-        <div className="detail-card">
+        <div className="ai-stat-card">
           <span>Accepted AI</span>
           <strong>{acceptedCount}</strong>
         </div>
-        <div className="detail-card">
+        <div className="ai-stat-card">
           <span>Fallbacks</span>
           <strong>{fallbackCount}</strong>
         </div>
-        <div className="detail-card">
+        <div className="ai-stat-card">
           <span>Waiting</span>
           <strong>{waitingCount}</strong>
         </div>
-        <div className="detail-card">
+        <div className="ai-stat-card">
           <span>Errors</span>
           <strong>{errorCount}</strong>
         </div>
       </div>
 
-      <input
-        className="people-search"
-        placeholder="Find citizens, AI status, reasons, tags..."
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
+      <div className="ai-monitor-controls">
+        <input
+          className="people-search"
+          placeholder="Find citizens, AI status, reasons, tags..."
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
 
-      <div className="filter-tabs" role="tablist" aria-label="AI monitor filters">
-        {FILTERS.map((item) => (
-          <button
-            aria-selected={filter === item.id}
-            className={filter === item.id ? "active" : ""}
-            key={item.id}
-            role="tab"
-            type="button"
-            onClick={() => setFilter(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
+        <div className="filter-tabs" role="tablist" aria-label="AI monitor filters">
+          {FILTERS.map((item) => (
+            <button
+              aria-selected={filter === item.id}
+              className={filter === item.id ? "active" : ""}
+              key={item.id}
+              role="tab"
+              type="button"
+              onClick={() => setFilter(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="workspace-layout">
+      <div className="workspace-layout ai-monitor-layout">
         <ol className="workspace-list ai-monitor-list">
           {citizens.length ? citizens.map((citizen) => (
             <li key={citizen.id}>
@@ -163,6 +165,7 @@ export function AiMonitor({ sim, selectedCitizenId, onSelectCitizen, onClose }: 
                   <em>{sourceLabel(citizen.brainDebug)}</em>
                 </div>
                 <p>{citizen.aiBrainStatus.message}</p>
+                <small>{citizen.currentThought}</small>
               </button>
             </li>
           )) : (
@@ -190,7 +193,7 @@ export function AiMonitor({ sim, selectedCitizenId, onSelectCitizen, onClose }: 
                 <button type="button" onClick={() => onSelectCitizen(selectedCitizen.id)}>Open Person</button>
               </div>
 
-              <div className="detail-grid">
+              <div className="detail-grid ai-compact-grid">
                 <div className="detail-card">
                   <span>Adapter</span>
                   <strong>{selectedCitizen.aiBrainEnabled ? "AI bridge" : "Scripted"}</strong>
@@ -233,7 +236,7 @@ export function AiMonitor({ sim, selectedCitizenId, onSelectCitizen, onClose }: 
 
                   <div className="context-section">
                     <h4>Input Snapshot</h4>
-                    <div className="detail-grid">
+                    <div className="detail-grid ai-compact-grid">
                       <div className="detail-card">
                         <span>Actions offered</span>
                         <strong>{debug.input.availableActions.length}</strong>
