@@ -44,6 +44,10 @@ export function MetricsBar({ summary }: MetricsBarProps) {
         <strong>{summary.activeProjects}</strong>
       </div>
       <div>
+        <span>Outcomes</span>
+        <strong>{summary.projectOutcomes}</strong>
+      </div>
+      <div>
         <span>Active Signals</span>
         <strong>{summary.activeSignals}</strong>
       </div>
