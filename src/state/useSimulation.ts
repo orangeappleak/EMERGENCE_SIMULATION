@@ -23,6 +23,16 @@ export function useSimulation() {
     forceRender((value) => value + 1);
   }, []);
 
+  const toggleCitizenAiBrain = useCallback((citizenId: string) => {
+    const citizen = simRef.current.citizens.find((item) => item.id === citizenId);
+    if (!citizen) return;
+    citizen.aiBrainEnabled = !citizen.aiBrainEnabled;
+    citizen.aiBrainStatus = citizen.aiBrainEnabled
+      ? { state: "fallback", message: "AI bridge mode is enabled. Scripted fallback stays active until a backend connector is configured." }
+      : { state: "off", message: "Using the scripted brain." };
+    forceRender((value) => value + 1);
+  }, []);
+
   const selectedCitizen = useMemo<Citizen>(() => {
     return simRef.current.citizens.find((citizen) => citizen.id === selectedCitizenId) ?? simRef.current.citizens[0];
   }, [selectedCitizenId, simRef.current.day, simRef.current.minute, simRef.current.totalConversations]);
@@ -36,6 +46,7 @@ export function useSimulation() {
     tick,
     setSpeed,
     togglePaused,
+    toggleCitizenAiBrain,
     seedRumor: () => {
       seedRumor(simRef.current);
       forceRender((value) => value + 1);

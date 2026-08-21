@@ -402,6 +402,7 @@ export default function App() {
                 setShowRoutes(false);
                 setShowSelectedRoute((open) => !open);
               }}
+              onToggleAiBrain={() => simulation.toggleCitizenAiBrain(simulation.selectedCitizen.id)}
               onSelectCitizen={(citizenId) => {
                 simulation.setSelectedCitizenId(citizenId);
                 setProfileOpen(true);

@@ -13,6 +13,7 @@ import {
   currentObligation,
   thoughtFor,
 } from "./brain";
+import { markAiBridgeFallback } from "./aiBridge";
 import { formatTime } from "./time";
 
 type BrainAdapterDecision = {
@@ -30,17 +31,39 @@ export function chooseCitizenBrainDecision(
   mode: BrainAdapterMode = "scripted",
 ): BrainAdapterDecision {
   if (mode !== "scripted") {
-    throw new Error(`Unsupported brain adapter mode: ${mode}`);
+    return chooseAiBridgeDecision(sim, citizen, rand);
   }
   return chooseScriptedBrainDecision(sim, citizen, rand);
+}
+
+function chooseAiBridgeDecision(
+  sim: SimulationState,
+  citizen: Citizen,
+  rand: () => number,
+): BrainAdapterDecision {
+  const input = buildCitizenContext(sim, citizen, "ai");
+  const fallback = chooseScriptedBrainDecision(sim, citizen, rand, "ai", "fallback");
+  markAiBridgeFallback(citizen, input);
+  return {
+    ...fallback,
+    debug: {
+      ...fallback.debug,
+      mode: "ai",
+      source: "fallback",
+      input,
+      summary: `${fallback.debug.summary} AI bridge fallback is active until a backend connector is configured.`,
+    },
+  };
 }
 
 function chooseScriptedBrainDecision(
   sim: SimulationState,
   citizen: Citizen,
   rand: () => number,
+  mode: BrainAdapterMode = "scripted",
+  source: CitizenBrainDebug["source"] = "scripted",
 ): BrainAdapterDecision {
-  const input = buildCitizenContext(sim, citizen, "scripted");
+  const input = buildCitizenContext(sim, citizen, mode);
   const scripted = chooseCitizenDecision(sim, citizen, rand);
   const obligation = currentObligation(citizen, sim.minute, sim);
   const thought = thoughtFor(citizen, scripted.intention, scripted.destinationId, obligation, sim);
@@ -80,7 +103,8 @@ function chooseScriptedBrainDecision(
     reasoning: scripted.reasoning,
     result: guardedResult,
     debug: {
-      mode: "scripted",
+      mode,
+      source,
       contractVersion: input.contract.version,
       decidedAtDay: sim.day,
       decidedAtTime: formatTime(sim.minute),

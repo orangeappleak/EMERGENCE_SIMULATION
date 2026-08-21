@@ -506,6 +506,11 @@ export type Citizen = {
   currentEmotion: CitizenEmotion;
   decisionReasoning: DecisionReasoning | null;
   brainDebug: CitizenBrainDebug | null;
+  aiBrainEnabled: boolean;
+  aiBrainStatus: {
+    state: "off" | "waiting" | "ready" | "fallback" | "error";
+    message: string;
+  };
   goalFocus: string;
   personalGoals: PersonalGoal[];
   problems: string[];
@@ -654,7 +659,7 @@ export type CitizenBrainResult = {
   goalNotes: string[];
 };
 
-export type BrainAdapterMode = "scripted";
+export type BrainAdapterMode = "scripted" | "ai";
 
 export type CitizenBrainValidation = {
   valid: boolean;
@@ -665,6 +670,7 @@ export type CitizenBrainValidation = {
 
 export type CitizenBrainDebug = {
   mode: BrainAdapterMode;
+  source: "scripted" | "ai" | "fallback";
   contractVersion: "ai-brain-contract-v1";
   decidedAtDay: number;
   decidedAtTime: string;

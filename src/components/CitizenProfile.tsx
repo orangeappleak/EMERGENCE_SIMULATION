@@ -10,6 +10,7 @@ type CitizenProfileProps = {
   sim: SimulationState;
   showRoute: boolean;
   onToggleRoute: () => void;
+  onToggleAiBrain: () => void;
   onSelectCitizen: (citizenId: string) => void;
   onClose: () => void;
 };
@@ -67,7 +68,7 @@ function distanceBetween(a: Citizen, b: Citizen) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelectCitizen, onClose }: CitizenProfileProps) {
+export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onToggleAiBrain, onSelectCitizen, onClose }: CitizenProfileProps) {
   const [showAllTransactions, setShowAllTransactions] = useState(false);
   const household = sim.households.find((item) => item.id === citizen.householdId);
   const workplace = citizen.workplaceId ? buildingById(citizen.workplaceId) : null;
@@ -261,9 +262,13 @@ export function CitizenProfile({ citizen, sim, showRoute, onToggleRoute, onSelec
       {citizen.brainDebug ? (
         <CollapsibleSection title="Brain Adapter" defaultOpen={false}>
           <div className="reasoning-card">
+            <button type="button" onClick={onToggleAiBrain}>
+              {citizen.aiBrainEnabled ? "Use Scripted Brain" : "Use AI Bridge"}
+            </button>
             <span>
-              {titleCase(citizen.brainDebug.mode)} mode · {citizen.brainDebug.contractVersion} · Day {citizen.brainDebug.decidedAtDay} {citizen.brainDebug.decidedAtTime}
+              {titleCase(citizen.brainDebug.mode)} mode · {titleCase(citizen.brainDebug.source)} source · {citizen.brainDebug.contractVersion} · Day {citizen.brainDebug.decidedAtDay} {citizen.brainDebug.decidedAtTime}
             </span>
+            <small>{titleCase(citizen.aiBrainStatus.state)} · {citizen.aiBrainStatus.message}</small>
             <strong>{citizen.brainDebug.output.decision.thought}</strong>
             <div className="decision-score-card">
               <div>

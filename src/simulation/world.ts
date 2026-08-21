@@ -180,6 +180,11 @@ function createCitizen(
     currentEmotion: mood < 45 ? "worried" : social < 45 ? "lonely" : energy < 50 ? "tired" : "calm",
     decisionReasoning: null,
     brainDebug: null,
+    aiBrainEnabled: false,
+    aiBrainStatus: {
+      state: "off",
+      message: "Using the scripted brain.",
+    },
     goalFocus: "settle into the day",
     personalGoals: [],
     problems: [],
@@ -540,7 +545,7 @@ function updateSchedule(sim: SimulationState, citizen: Citizen) {
     return;
   }
 
-  const decision = chooseCitizenBrainDecision(sim, citizen, rand);
+  const decision = chooseCitizenBrainDecision(sim, citizen, rand, citizen.aiBrainEnabled ? "ai" : "scripted");
   citizen.currentIntention = decision.intention;
   citizen.decisionReasoning = decision.reasoning;
   citizen.brainDebug = decision.debug;
