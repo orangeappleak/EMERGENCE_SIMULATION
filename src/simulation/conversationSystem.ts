@@ -196,7 +196,85 @@ function pickConversationTopic(sim: SimulationState, topics: ConversationTopic[]
   return topics[Math.floor(rand() * topics.length)];
 }
 
-function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen, context: ConversationContext, rand: () => number) {
+function isGuardianChildTalk(speaker: Citizen, listener: Citizen) {
+  return speaker.householdId === listener.householdId
+    && (
+      (speaker.familyRole === "parent" && listener.lifeStage === "child")
+      || (listener.familyRole === "parent" && speaker.lifeStage === "child")
+    );
+}
+
+function contextLabel(sim: SimulationState, context: ConversationContext, location: ConversationLocation) {
+  if (sim.minute < 11 * 60) return "morning check-in";
+  if (location.building.kind === "market") return "errand talk";
+  if (location.building.kind === "clinic") return "clinic check-in";
+  if (location.building.kind === "school") return "school check-in";
+  if (location.building.kind === "factory" || location.building.kind === "office") return "work check-in";
+  if (context.zone === "home") return "home check-in";
+  if (context.zone === "street") return "street greeting";
+  return "daily check-in";
+}
+
+function addPlaceSpecificLines(lines: string[], speaker: Citizen, listener: Citizen, location: ConversationLocation) {
+  const place = location.building.name;
+  const slot = location.slot.name;
+  if (location.building.kind === "home") {
+    if (location.slot.kind === "kitchen") {
+      lines.push(
+        `${speaker.name} asked ${listener.name} if there was anything quick to eat in the kitchen.`,
+        `${speaker.name} and ${listener.name} talked about breakfast while passing through the kitchen.`,
+      );
+    } else if (location.slot.kind === "bedroom") {
+      lines.push(`${speaker.name} asked ${listener.name} if they had slept okay.`);
+    } else if (location.slot.kind === "yard") {
+      lines.push(`${speaker.name} and ${listener.name} talked for a moment outside ${place}.`);
+    } else {
+      lines.push(`${speaker.name} checked in with ${listener.name} around the ${slot}.`);
+    }
+  }
+
+  if (location.building.kind === "school") {
+    if (speaker.institutionRole === "principal" || speaker.institutionRole === "teacher") {
+      lines.push(`${speaker.name} asked ${listener.name} how class was going today.`);
+    } else if (listener.institutionRole === "principal" || listener.institutionRole === "teacher") {
+      lines.push(`${speaker.name} asked ${listener.name} what they should focus on at school today.`);
+    } else {
+      lines.push(`${speaker.name} and ${listener.name} talked about class and the school day.`);
+    }
+  }
+
+  if (location.building.kind === "market") {
+    lines.push(
+      `${speaker.name} asked ${listener.name} what they were picking up at ${place}.`,
+      `${speaker.name} and ${listener.name} talked about what looked useful in the ${slot}.`,
+    );
+    if (speaker.needs.hunger > 62 || listener.needs.hunger > 62) {
+      lines.push(`${speaker.name} mentioned that food sounded good while they were at ${place}.`);
+    }
+  }
+
+  if (location.building.kind === "clinic") {
+    lines.push(
+      `${speaker.name} asked ${listener.name} if they had been waiting long at the clinic.`,
+      `${speaker.name} and ${listener.name} kept the conversation quiet in the ${slot}.`,
+    );
+    if (speaker.needs.rest > 72 || listener.needs.rest > 72) {
+      lines.push(`${speaker.name} asked ${listener.name} if they were feeling worn out too.`);
+    }
+  }
+
+  if (location.building.kind === "factory" || location.building.kind === "office") {
+    lines.push(
+      `${speaker.name} asked ${listener.name} how the shift was going at ${place}.`,
+      `${speaker.name} and ${listener.name} traded a quick check-in near the ${slot}.`,
+    );
+    if (location.slot.kind === "break") {
+      lines.push(`${speaker.name} asked ${listener.name} if they had time for a real break.`);
+    }
+  }
+}
+
+function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen, context: ConversationContext, location: ConversationLocation, rand: () => number) {
   const prior = speaker.relationships[listener.id];
   const morning = sim.minute < 11 * 60;
   const midday = sim.minute >= 11 * 60 && sim.minute < 15 * 60;
@@ -211,6 +289,19 @@ function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen
     `${speaker.name} checked in with ${listener.name} for a moment.`,
     `${speaker.name} and ${listener.name} talked about the ${weather} weather.`,
   ];
+  addPlaceSpecificLines(lines, speaker, listener, location);
+  if (isGuardianChildTalk(speaker, listener)) {
+    if (speaker.familyRole === "parent") {
+      lines.push(
+        `${speaker.name} asked ${listener.name} if they had everything they needed today.`,
+        `${speaker.name} reminded ${listener.name} to take the day one step at a time.`,
+      );
+    } else {
+      lines.push(`${speaker.name} told ${listener.name} how the morning was going so far.`);
+    }
+  } else if (speaker.lifeStage === "child" || listener.lifeStage === "child") {
+    lines.push(`${speaker.name} and ${listener.name} kept the conversation simple and light.`);
+  }
   if (prior?.lastTopic && prior.interactions >= 2 && rand() < 0.45) {
     if (prior.lastTopic === "daily life") lines.push(`${speaker.name} followed up with ${listener.name} after their last everyday check-in.`);
     if (prior.lastTopic === "school") lines.push(`${speaker.name} asked ${listener.name} how school had gone since they last talked.`);
@@ -246,18 +337,18 @@ function dailyLifeLine(sim: SimulationState, speaker: Citizen, listener: Citizen
   return lines[Math.floor(rand() * lines.length)];
 }
 
-function conversationLine(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, stage: RelationshipStage, context: ConversationContext, rand: () => number) {
+function conversationLine(sim: SimulationState, speaker: Citizen, listener: Citizen, topic: ConversationTopic, stage: RelationshipStage, context: ConversationContext, location: ConversationLocation, rand: () => number) {
   if (topic === "daily life" && stage === "stranger") {
-    return `${speaker.name} introduced themselves to ${listener.name} and kept the conversation light.`;
+    return `${speaker.name} introduced themselves to ${listener.name} near the ${location.slot.name} and kept it light.`;
   }
   if (topic === "daily life" && stage === "acquaintance") {
-    return dailyLifeLine(sim, speaker, listener, context, rand);
+    return dailyLifeLine(sim, speaker, listener, context, location, rand);
   }
-  if (topic === "daily life") return dailyLifeLine(sim, speaker, listener, context, rand);
+  if (topic === "daily life") return dailyLifeLine(sim, speaker, listener, context, location, rand);
   return brainConversationText(sim, speaker, listener, topic, rand);
 }
 
-function evidenceTags(topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen, location: ConversationLocation) {
+function evidenceTags(sim: SimulationState, topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen, location: ConversationLocation) {
   const tags = new Set<string>([topic, classification, context.zone, location.building.kind]);
   if (a.householdId === b.householdId) tags.add("same household");
   if (a.workplaceId && a.workplaceId === b.workplaceId) tags.add("same workplace");
@@ -267,10 +358,11 @@ function evidenceTags(topic: ConversationTopic, classification: ConversationClas
   if (topic === "school") tags.add("education");
   if (topic === "workplace gossip") tags.add("employment");
   if (topic === "family") tags.add("household");
+  if (topic === "daily life") tags.add(contextLabel(sim, context, location));
   return Array.from(tags);
 }
 
-function evidenceSummary(topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen) {
+function evidenceSummary(sim: SimulationState, topic: ConversationTopic, classification: ConversationClassification, context: ConversationContext, a: Citizen, b: Citizen, location: ConversationLocation) {
   if (topic === "money stress") return `${a.name} and ${b.name} surfaced money pressure during a ${context.zone} conversation.`;
   if (topic === "personal problem") return `${a.name} and ${b.name} shared a personal pressure that may matter later.`;
   if (topic === "future plans") return `${a.name} and ${b.name} talked about something they may want to do later.`;
@@ -278,14 +370,15 @@ function evidenceSummary(topic: ConversationTopic, classification: ConversationC
   if (topic === "school") return `${a.name} and ${b.name} checked in about school.`;
   if (topic === "family") return `${a.name} and ${b.name} checked in about home life.`;
   if (classification === "secretive") return `${a.name} and ${b.name} exchanged information that may spread through trust.`;
-  return `${a.name} and ${b.name} maintained an ordinary social tie.`;
+  return `${a.name} and ${b.name} had a ${contextLabel(sim, context, location)} near the ${location.slot.name}.`;
 }
 
 function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, context: ConversationContext, stage: RelationshipStage, rand: () => number): ConversationPlan {
   const topics = possibleTopics(sim, a, b, context, stage);
   const topic = pickConversationTopic(sim, topics, stage, context, a, b, rand);
-  const aText = conversationLine(sim, a, b, topic, stage, context, rand);
-  const bText = conversationLine(sim, b, a, topic, stage, context, rand);
+  const location = conversationLocation(a, b);
+  const aText = conversationLine(sim, a, b, topic, stage, context, location, rand);
+  const bText = conversationLine(sim, b, a, topic, stage, context, location, rand);
   const classified = brainClassifyConversation(topic, a, b);
   const classification = topic === "daily life" || (topic === "family" && sim.day <= 1 && context.zone === "home")
     ? "casual"
@@ -293,9 +386,8 @@ function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, co
   const classificationReason = classification === "casual"
     ? "They are still building ordinary familiarity, so the exchange stays light."
     : classified.reason;
-  const location = conversationLocation(a, b);
   const importance = conversationImportance(topic, classification, a, b);
-  const tags = evidenceTags(topic, classification, context, a, b, location);
+  const tags = evidenceTags(sim, topic, classification, context, a, b, location);
   const relationshipDelta = topic === "personal problem" || topic === "future plans" ? 4 : topic === "rumor" || topic === "people gossip" ? 3 : 2;
 
   return {
@@ -307,7 +399,7 @@ function createConversationPlan(sim: SimulationState, a: Citizen, b: Citizen, co
     bText,
     location,
     contextZone: context.zone,
-    evidenceSummary: evidenceSummary(topic, classification, context, a, b),
+    evidenceSummary: evidenceSummary(sim, topic, classification, context, a, b, location),
     evidenceTags: tags,
     importance,
     relationshipDelta,
