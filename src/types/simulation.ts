@@ -564,6 +564,11 @@ export type CitizenBrainContext = {
     version: "ai-brain-contract-v1";
     adapterMode: BrainAdapterMode;
     instruction: string;
+    outputSchema: {
+      requiredDecisionFields: Array<keyof CitizenBrainDecision>;
+      optionalChannels: Array<keyof Pick<CitizenBrainResult, "observations" | "memories" | "goalNotes">>;
+    };
+    guardrails: string[];
   };
   time: {
     day: number;
@@ -655,6 +660,7 @@ export type CitizenBrainValidation = {
   valid: boolean;
   warnings: string[];
   repairedFields: string[];
+  blockedFields: string[];
 };
 
 export type CitizenBrainDebug = {
