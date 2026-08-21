@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "ai:server": "node server/aiBridgeServer.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

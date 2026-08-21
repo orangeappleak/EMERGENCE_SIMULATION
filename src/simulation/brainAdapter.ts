@@ -13,7 +13,7 @@ import {
   currentObligation,
   thoughtFor,
 } from "./brain";
-import { markAiBridgeFallback } from "./aiBridge";
+import { requestAiDecision, takeReadyAiDecision } from "./aiBridge";
 import { formatTime } from "./time";
 
 type BrainAdapterDecision = {
@@ -43,7 +43,31 @@ function chooseAiBridgeDecision(
 ): BrainAdapterDecision {
   const input = buildCitizenContext(sim, citizen, "ai");
   const fallback = chooseScriptedBrainDecision(sim, citizen, rand, "ai", "fallback");
-  markAiBridgeFallback(citizen, input);
+  const readyResult = takeReadyAiDecision(citizen, input);
+  if (readyResult) {
+    const { result: guardedResult, validation } = guardBrainResult(input, readyResult, fallback.result.decision);
+    return {
+      intention: guardedResult.decision.intention,
+      destinationId: guardedResult.decision.destinationId,
+      reasoning: fallback.reasoning,
+      result: guardedResult,
+      debug: {
+        mode: "ai",
+        source: validation.valid ? "ai" : "fallback",
+        contractVersion: input.contract.version,
+        decidedAtDay: sim.day,
+        decidedAtTime: formatTime(sim.minute),
+        input,
+        output: guardedResult,
+        validation,
+        summary: validation.valid
+          ? guardedResult.decision.reason
+          : `${guardedResult.decision.reason} AI output needed repairs before use.`,
+      },
+    };
+  }
+
+  requestAiDecision(citizen, input);
   return {
     ...fallback,
     debug: {
