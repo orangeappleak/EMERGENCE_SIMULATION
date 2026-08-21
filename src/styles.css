@@ -1378,6 +1378,19 @@ h3 {
   padding: 0 9px;
 }
 
+.decision-people-row .tag-pill {
+  align-items: center;
+  background: #eef4fb;
+  border: 1px solid #d5e1ed;
+  border-radius: 999px;
+  color: var(--blue);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 28px;
+  padding: 0 9px;
+}
+
 .request-action-row {
   display: flex;
   flex-wrap: wrap;

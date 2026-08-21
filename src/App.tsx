@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AiMonitor } from "./components/AiMonitor";
 import { ConversationsBrowser } from "./components/ConversationsBrowser";
 import { BuildingInterior } from "./components/BuildingInterior";
 import { CitizenProfile } from "./components/CitizenProfile";
@@ -26,6 +27,7 @@ export default function App() {
   const [worldProjectsOpen, setWorldProjectsOpen] = useState(false);
   const [worldSignalsOpen, setWorldSignalsOpen] = useState(false);
   const [civicIssuesOpen, setCivicIssuesOpen] = useState(false);
+  const [aiMonitorOpen, setAiMonitorOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showRoutes, setShowRoutes] = useState(false);
   const [showSelectedRoute, setShowSelectedRoute] = useState(false);
@@ -75,6 +77,7 @@ export default function App() {
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -92,6 +95,7 @@ export default function App() {
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -109,6 +113,7 @@ export default function App() {
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -126,6 +131,7 @@ export default function App() {
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -143,6 +149,7 @@ export default function App() {
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -160,6 +167,7 @@ export default function App() {
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -177,6 +185,7 @@ export default function App() {
               setWorldRequestsOpen(false);
               setWorldSignalsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -194,6 +203,7 @@ export default function App() {
               setWorldRequestsOpen(false);
               setWorldProjectsOpen(false);
               setCivicIssuesOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
@@ -211,10 +221,29 @@ export default function App() {
               setWorldRequestsOpen(false);
               setWorldProjectsOpen(false);
               setWorldSignalsOpen(false);
+              setAiMonitorOpen(false);
               setSelectedBuildingId(null);
             }}
           >
             {civicIssuesOpen ? "Hide Issues" : "Issues"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAiMonitorOpen((open) => !open);
+              setControlsOpen(false);
+              setPeopleOpen(false);
+              setConversationsOpen(false);
+              setTransactionsOpen(false);
+              setWorldDecisionsOpen(false);
+              setWorldRequestsOpen(false);
+              setWorldProjectsOpen(false);
+              setWorldSignalsOpen(false);
+              setCivicIssuesOpen(false);
+              setSelectedBuildingId(null);
+            }}
+          >
+            {aiMonitorOpen ? "Hide AI Monitor" : "AI Monitor"}
           </button>
           <button type="button" onClick={() => setProfileOpen((open) => !open)}>
             {profileOpen ? "Hide Person" : simulation.selectedCitizen.name}
@@ -355,6 +384,20 @@ export default function App() {
           </div>
         ) : null}
 
+        {aiMonitorOpen ? (
+          <div className="drawer drawer-center">
+            <AiMonitor
+              sim={simulation.sim}
+              selectedCitizenId={simulation.selectedCitizenId}
+              onSelectCitizen={(citizenId) => {
+                simulation.setSelectedCitizenId(citizenId);
+                setProfileOpen(true);
+              }}
+              onClose={() => setAiMonitorOpen(false)}
+            />
+          </div>
+        ) : null}
+
         <PixiWorld
           sim={simulation.sim}
           selectedCitizenId={simulation.selectedCitizenId}
@@ -375,6 +418,7 @@ export default function App() {
             setWorldProjectsOpen(false);
             setWorldSignalsOpen(false);
             setCivicIssuesOpen(false);
+            setAiMonitorOpen(false);
           }}
         />
 
